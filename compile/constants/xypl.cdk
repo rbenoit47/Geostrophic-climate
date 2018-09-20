@@ -1,0 +1,10 @@
+      integer g1, g2, g3, g4
+      real xpl, ypl, xpq, ypq
+      real*8 xref, yref
+      pointer ( paxpl, xpl(*) ), ( paypl, ypl(*) )
+      pointer ( paxpq, xpq(*) ), ( paypq, ypq(*) )
+*
+      common /position/ paxpl, paypl, paxpq, paypq
+      common /gridpar_i/ g1, g2, g3, g4
+      common /gridpar_r8/ xref, yref
+*

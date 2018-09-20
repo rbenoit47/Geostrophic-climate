@@ -1,0 +1,9 @@
+      real grav, cappa, re, ra, tt0, rayt, omega
+      parameter ( grav=9.80616, cappa=0.285491218, re=461.51, ra=287.05)
+      parameter ( tt0=273.16, rayt=6371220., omega=0.7292E-4 )
+c
+ccc    parameters in double precision
+c
+      real*8 pi_8, omega_8, rayt_8
+      parameter ( omega_8=0.7292E-04, pi_8=3.141592653589793 )
+      parameter ( rayt_8=6371220.0d0 )

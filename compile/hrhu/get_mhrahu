@@ -1,0 +1,21 @@
+dir38=~/classification/2017-test/v_3.8
+dircompile=~/classification/compile
+PHY_RCS=${dir38}/RCS:3.8
+rm -rf work
+mkdir work
+cd work
+#
+ouv_exp base -RCSPATH "${PHY_RCS}"
+r.make_exp
+make mhrahu.o
+make inctphy.o
+#non dans librmn.     make constnt.o
+rm libphy.a
+ar rcs libphy.a *.o
+make clean
+#
+here=`pwd`
+pushd $dircompile
+ln -sfn $here/libphy.a 
+popd
+

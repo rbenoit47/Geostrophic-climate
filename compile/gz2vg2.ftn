@@ -1,0 +1,973 @@
+      program gz2vg2   !RB2018
+      implicit none
+c
+c     Author: Wei Yu, Dec. 2003
+c
+c     Objective: Calculate the geostrophic wind: wind velocity and
+c                direction, pressure, etc., at several vertical levels
+c                above sea surface level (ASL).
+c                The variables are linearly interpolated from pressure
+c                levels to height levels with hydrostatic assumption.
+c                The Brundt-Vaisala Number (stratification of the
+c                atmosphere) divised with the wind speed: Fr-1 = N.H/U
+c                Shear = difference of Vg between 1500 m and 0 m ASL.
+c
+c     __________________________________________________________________
+c
+#include "constants/const.cdk"
+#include "constants/grid.cdk"
+#include "constants/gz2vg.cdk"
+#include "constants/xypl.cdk"
+c
+*********************************************************************************************
+************************************************DECLARATION**********************************
+*********************************************************************************************
+****
+*     Declare variables used by the RPN standard file library
+****
+      character (len=2) nomvar
+      character (len=1) typvar, grtyp
+      character (len=8) etiket
+      integer key, dateo, datev, deet, npas, ni, nj, nk, idate
+      integer npak, datyp, nbits
+      integer ip1vg, ip2vg, ip3vg, ip1gz, ip2gz, ip3gz
+      integer ip1, ip2, ip3
+      integer ig1, ig2, ig3, ig4
+      integer swa, lng, dltf, ubc, extra1, extra2, extra3
+      parameter ( npak = -16 )
+****
+*     Declare the name and type of the RPN standard file functions   
+****
+      integer fstecr, fstlir, fstlis, fstprm, fstinf
+      integer fnom, fstouv, fclos, fstfrm, fstnbr, fstvoi, fsteof
+      integer fstopc
+      external fstecr, fstlir, fstlis, fstprm, cxgaig, fstinf
+      external fnom, fstouv, fclos, fstfrm, fstnbr, fstvoi, fsteof
+      external fstopc
+*******
+      external newdate
+      integer newdate, result
+      integer date, time, stamp, enddate, endtime
+      integer bdateo
+      integer ipt,jpt
+      real dd, ff
+      real tfreq
+      integer iunclass, iundb
+      parameter (iunclass=52, iundb=53 )
+      integer sect_db, i_db, j_db, iclas_db
+      integer status, ipass, npass
+      integer nrecords
+      real hundorecords
+      character (len=4) cyear
+      character (len=2) cmonth
+      integer year, month, day, hour, lastmonth
+      character (len=80) ifile, fname
+      integer nimax, njmax, i, j
+      integer ier,iunin,iunout
+      parameter ( iunin=1, iunout=2 )
+      real rtmp
+      integer nkin, k, k1, k2, nkout, ncom, com, nvar, ivar, nktmp
+                    ! com=1:uu, 2:vv, 3:norme, 4:dd
+                    ! nvar=1:uu, 2:vv, 3:norme, 4:dd, 5:pp, 6:tt, 7:hu
+                    ! combine these two in one in the future
+      character (len=4), allocatable, dimension(:) :: nomvar4
+      parameter ( ncom=4 )
+      logical goodmonth
+      real Ratm
+      real, allocatable, dimension(:,:) :: vgmean, gzmean
+      real, allocatable, dimension(:,:,:,:) :: uvndd
+      real, allocatable, dimension(:,:) :: shear, nbvsuru
+      real, allocatable, dimension(:,:) :: x1, x2, y1, y2, xx, yy
+      real, allocatable, dimension(:,:) :: work, buffer
+      real, allocatable, dimension(:,:,:) :: gz_in, tt_in, hr_in, hu_in
+      real, allocatable, dimension(:,:,:) :: hr_out, pp_out,
+     &                                       tt_out, hu_out
+      integer isect, sect, secti, nshear, iclas, she1, she2, she
+      integer maxclassect
+      parameter ( nshear=2, maxclassect=14 )
+      real f1, f2, f3, f4, p5
+      parameter ( f1=1.35, f2=1.50, f3=2.20, f4=3.50, p5=0.5 )
+      character (len=1) cshear(nshear)
+      data cshear /'M', 'P'/
+      character (len=3) csect
+      character (len=2) cclas
+      character (len=12) etiket12
+      real dangle
+      real, allocatable, dimension(:) :: angle
+      real, allocatable, dimension(:,:,:,:,:) :: sumshear, freqsect
+      real, allocatable, dimension(:,:,:,:,:,:,:) :: uuvvtt
+      integer, allocatable, dimension(:,:,:) :: nclassect
+      real, allocatable, dimension(:,:,:,:) :: classsect
+      integer, allocatable, dimension(:) :: nclassect_g
+      real, allocatable, dimension(:,:) :: classsect_g
+      real v0, dv, dv2, seuil
+      parameter ( v0 = 2., dv = 2.,  dv2 = dv * 2., seuil = 18. )
+      logical memalloc
+      integer modp
+      real hu, hr, tx, px, lnps
+!RB 2018 <
+      real *8 atan2d, rad2deg
+      real xxx, yyy
+      atan2d(xxx,yyy)=atan2(xxx,yyy)*rad2deg
+!RB 2018 >
+*********************************************************************************************
+*********************************************************************************************
+*********************************************************************************************
+*
+****
+*
+      rad2deg=dble(180.0)/(2*asin(dble(1.0)))  !RB 2018 for atan
+      call gz2vg_cfg_
+c
+      fname = trim(outdir) // '/' // 'newclas'
+      open ( iunclass, file=fname, form='formatted', status='new' )
+c
+      do k = 1, maxlevels
+         if ( ip1s(k) .ne. -1 ) nkin = k
+         if ( height(k) .ne. -1. ) nkout = k
+      enddo
+*
+**** defines angle
+*
+      allocate( angle(nsect), stat=status )
+      dangle = 360. / nsect
+      angle(1) = dangle / 2.
+      do sect = 2, nsect
+         angle(sect) = angle(sect-1 ) + dangle
+      enddo
+c
+      allocate( nclassect_g(nsect), stat=status )
+      allocate( classsect_g(maxclassect,nsect), stat=status )
+      allocate( nclassect(Grd_ni-1,Grd_nj-1,nsect), stat=status )
+      allocate( classsect(Grd_ni-1,Grd_nj-1,maxclassect,nsect),
+     &                                                     stat=status )
+      do secti = 1, nsect
+         nclassect_g(secti) = nclass
+         classsect_g(1,secti) = v0
+         do iclas = 2, nclassect_g(secti) -1
+            if ( classsect_g(iclas-1,secti) .lt. seuil ) then
+               classsect_g(iclas,secti) = classsect_g(iclas-1,secti)+dv
+            else
+               classsect_g(iclas,secti) = classsect_g(iclas-1,secti)
+     &                                     + dv2
+            endif
+         enddo
+      enddo
+      do sect_db = 1, nsect
+            do j_db = 1,Grd_nj-1 
+            do i_db = 1,Grd_ni-1
+               nclassect(i_db,j_db,sect_db) = nclassect_g(sect_db)
+               do iclas_db = 1, nclassect(i_db,j_db,sect_db)-1
+                  classsect(i_db,j_db,iclas_db,sect_db) =
+     &                                     classsect_g(iclas_db,sect_db)
+               enddo
+            enddo
+            enddo
+      enddo
+*********************************************************************************************
+***************************************LOOP*CLIMATE*DATA*************************************
+*********************************************************************************************
+*
+**** defines date ****************************************************************
+*
+      enddate = eyear * 10000 + emonth * 100 + eday
+      endtime = ehour * 1000000 
+      result = newdate( dateo, enddate, endtime, 3 )
+      call incdat( idate, dateo, sampling )
+      result = newdate( idate, enddate, endtime, -3 )
+c
+      ier = fstopc( 'MSGLVL', 'CATAST', 0 )
+c
+ 20   continue
+      year = byear
+      month = bmonth
+      day = bday
+      hour = bhour
+      lastmonth = -1
+      date = year * 10000 + month * 100 + day
+      time = hour * 1000000 
+      memalloc = .true.
+      nrecords = 0.
+      do
+*
+**** seasonal statistics: if not annual, choice of months to be used ************
+*
+         if ( season .ne. 'ANU' ) then
+            goodmonth = ( season .eq. 'DJF' .and. ( month .eq. 12 .or. 
+     &                                month .eq. 1 .or. month .eq. 2 ) )
+     &                 .or. ( season .eq. 'MAM' .and. month .ge. 3 .and.
+     &                                                month .le. 5  )
+     &                 .or. ( season .eq. 'JJA' .and. month .ge. 6 .and.
+     &                                                month .le. 8  )
+     &                 .or. ( season .eq. 'SON' .and. month .ge. 9 .and.
+     &                                                month .le. 11 )
+c
+            if ( .not. goodmonth ) then
+               result = newdate( dateo, date, time, 3 )
+               goto 111
+            endif
+         endif
+*
+**** Read data *****************************************************************
+*
+         if ( month .ne. lastmonth ) then
+               ier = fstfrm(iunin)
+               ier = fclos(iunin)
+c
+            write( cyear, '(i4)' ) year
+            if ( month .lt. 10 ) then
+               write( cmonth, '(i1)' ) month
+c               ifile = cyear // '0' // trim(cmonth) // '_' // region
+               ifile = cyear // '0' // trim(cmonth)
+            else
+               write( cmonth, '(i2)' ) month
+c               ifile = cyear // trim(cmonth) // '_' // region
+               ifile = cyear // trim(cmonth)
+            endif
+            ifile = trim(indir) // '/' // trim(ifile)
+c
+            print*, ifile
+c
+            ier = fnom( iunin, ifile, 'STD+RND', 0)
+            if ( ier .lt. 0 ) then
+               print *, 'Error while linking the file:', trim(ifile)
+               stop
+            endif
+            ier = fstouv( iunin, 'STD+RND' )
+            if ( ier .lt. 0 ) then
+               print *, 'Cannot open the file:', trim(ifile)
+               stop
+            endif
+            lastmonth = month
+         endif
+c
+         result = newdate( dateo, date, time, 3 )
+       print*, 'Here begins the loop: dateo, date, time=',
+     &          dateo, date, time
+         ier = fstinf( iunin, ni, nj, nk, dateo, '', -1, -1, -1, '',
+     &                 'GZ' )
+         print*, 'ier, dateo=', ier, dateo
+         if ( ier .lt. 0 ) goto 111      ! Record not found
+                                         ! Continue with the next
+                                         ! available record
+         ier = fstprm( ier, dateo, deet, npas, ni, nj, nk, nbits, datyp,
+     &                 ip1, ip2, ip3, typvar, nomvar, etiket, grtyp, 
+     &                 ig1, ig2, ig3, ig4, swa, lng, dltf, ubc, extra1,
+     &                 extra2, extra3 )
+* 
+**** Memory allocation ********************************************************
+*
+        if ( memalloc ) then
+            nimax = ni
+            njmax = nj
+            allocate( gz_in(nimax,njmax,nkin), stat=status )
+            allocate( tt_in(nimax,njmax,nkin), stat=status )
+            allocate( hr_in(nimax,njmax,nkin), stat=status )
+            allocate( hu_in(nimax,njmax,nkin), stat=status )
+            allocate( pp_out(nimax,njmax,nkout), stat=status )
+            allocate( tt_out(nimax,njmax,nkout), stat=status )
+            allocate( hu_out(nimax,njmax,nkout), stat=status )
+            allocate( hr_out(nimax,njmax,nkout), stat=status )
+            allocate( work(nimax,njmax), stat=status )
+            allocate( buffer(nimax,njmax), stat=status )
+            allocate( x1(nimax,njmax), stat=status )
+            allocate( x2(nimax,njmax), stat=status )
+            allocate( y1(nimax,njmax), stat=status )
+            allocate( y2(nimax,njmax), stat=status )
+            allocate( xx(nimax,njmax), stat=status )
+            allocate( yy(nimax,njmax), stat=status )
+            allocate( uvndd(nimax-1,njmax-1,nkin,ncom), stat=status )
+            allocate( shear(nimax-1,njmax-1), stat=status )
+            allocate( nbvsuru(nimax-1,njmax-1), stat=status )
+            nktmp = 4
+            nvar = 3
+            allocate( sumshear(nimax-1,njmax-1,maxclassect,nshear,
+     &                                          nsect), stat=status )
+            allocate( freqsect(nimax-1,njmax-1,maxclassect,nshear,
+     &                                          nsect), stat=status )
+            allocate( uuvvtt(nimax-1,njmax-1,maxclassect,nshear,
+     &                               nsect,nktmp,nvar), stat=status )
+            allocate( nomvar4(nvar), stat=status )
+            allocate( vgmean(nimax-1,njmax-1), stat=status )
+            allocate( gzmean(nimax,njmax), stat=status )
+*
+**** Initialisation (to 0) ********************************************************
+*
+               nomvar4(1) = 'UU'
+               nomvar4(2) = 'VV'
+               nomvar4(3) = 'TT'
+               do sect = 1, nsect
+               do she = 1, nshear
+               do iclas = 1, maxclassect
+               do j = 1, njmax-1
+               do i = 1, nimax-1
+                  sumshear(i,j,iclas,she,sect) = 0.
+                  freqsect(i,j,iclas,she,sect) = 0.
+                  do ivar = 1, nvar
+                  do k = 1, nktmp
+                     uuvvtt(i,j,iclas,she,sect,k,ivar) = 0.
+                  enddo
+                  enddo
+               enddo
+               enddo
+               enddo
+               enddo
+               enddo
+c
+               do j = 1, njmax
+               do i = 1, nimax
+                  gzmean(i,j) = 0.
+               enddo
+               enddo
+               do j = 1, njmax-1
+               do i = 1, nimax-1
+                  vgmean(i,j) = 0.
+               enddo
+               enddo
+c
+            memalloc = .false.
+         endif
+*
+****Read GZ, TT + tt0=273.16, HR ********************************************************
+*
+ 25   print*,'New date' !keep it for now
+         do k = 1, nkin
+            ier = fstlir( gz_in(1,1,k), iunin, ni, nj, nk, dateo, '',
+     &                    ip1s(k), -1, -1, '', 'GZ' )
+            ier = fstlir( tt_in(1,1,k), iunin, ni, nj, nk, dateo, '',
+     &                    ip1s(k), -1, -1, '', 'TT' )
+            ier = fstlir( hr_in(1,1,k), iunin, ni, nj, nk, dateo, '',
+     &                    ip1s(k), -1, -1, '', 'HR' )
+            do j = 1, njmax
+            do i = 1, nimax
+               tt_in(i,j,k) = tt_in(i,j,k) + tt0
+            enddo
+            enddo
+         enddo
+*
+**** Number of records *******************************************************
+*
+         nrecords = nrecords + 1.
+*
+**** Interpolation of PP: Hydrostatic or linear *******************************
+*
+         if ( method .eq. 'hydrostatic' ) then
+c
+            lnps = 0.
+            modp = 0
+            do k = 1, nkin
+              do j = 1, njmax
+              do i = 1, nimax
+                 work(i,j) = ip1s(k) * 100.
+                 buffer(i,j) = lnps
+              enddo
+              enddo
+*
+**** Covert relative humidity to specific humidity **********************************
+*
+              call mhrahu( hu_in(1,1,k), hr_in(1,1,k), tt_in(1,1,k),
+     &                      work, buffer, modp, swtt, swph, 
+     &                      nimax*njmax, 1, nimax*njmax )
+              do j = 1, njmax
+               do i = 1, nimax
+                  Ratm = ( hu_in(i,j,k) * re + ra ) /
+     &                   ( hu_in(i,j,k) + 1. )
+                  pp_out(i,j,k) = grav / ( Ratm * tt_in(i,j,k) ) * 
+     &                            ( gz_in(i,j,k) * 10. - height(k) ) +
+     &                            alog(work(i,j))
+                  pp_out(i,j,k) = exp( pp_out(i,j,k) ) / 100.
+               enddo
+               enddo
+            enddo
+         else if ( method .eq. 'linear' ) then
+            do k = 1, nkin
+               k1 = max ( 1, k-1 )
+               k2 = k1 + 1
+               do j = 1, njmax
+               do i = 1, nimax
+                  x1(i,j) = gz_in(i,j,k1)                     !=gz1000
+                  x2(i,j) = gz_in(i,j,k2)                     !=gz850
+                  y1(i,j) = ip1s(k1) * 1.                     !=1000
+                  y2(i,j) = ip1s(k2) * 1.
+                  xx(i,j) = height(k1) / 10.
+               enddo
+               enddo
+               call intlin( x1, x2, y1, y2, xx, yy, nimax, njmax )
+               do j = 1, nj
+               do i = 1, ni
+                  pp_out(i,j,k) = yy(i,j)
+               enddo
+               enddo
+            enddo
+         else
+            print*, 'Not valid method:', method
+            stop
+         endif
+*
+**** Linear Interpolation of TT ****************************************
+*
+         do k = 1, nkin
+            k1 = max ( 1, k-1 )
+            k2 = k1 + 1
+            do j = 1, njmax
+            do i = 1, nimax
+               x1(i,j) = ip1s(k1) * 1.
+               x2(i,j) = ip1s(k2) * 1.
+               y1(i,j) = tt_in(i,j,k1)
+               y2(i,j) = tt_in(i,j,k2)
+               xx(i,j) = pp_out(i,j,k)
+            enddo
+            enddo
+            call intlin( x1, x2, y1, y2, xx, yy, nimax, njmax )
+            do j = 1, nj
+            do i = 1, ni
+               tt_out(i,j,k) = yy(i,j)
+            enddo
+            enddo
+         enddo
+*
+**** Linear Interpolation of HU ****************************************
+*
+         do k = 1, nkin
+            k1 = max ( 1, k-1 )
+            k2 = k1 + 1
+            do j = 1, njmax
+            do i = 1, nimax
+               x1(i,j) = ip1s(k1) * 1.
+               x2(i,j) = ip1s(k2) * 1.
+               y1(i,j) = hu_in(i,j,k1)
+               y2(i,j) = hu_in(i,j,k2)
+               xx(i,j) = pp_out(i,j,k)
+            enddo
+            enddo
+            call intlin( x1, x2, y1, y2, xx, yy, nimax, njmax )
+            do j = 1, nj
+            do i = 1, ni
+               hu_out(i,j,k) = yy(i,j)
+            enddo
+            enddo
+         enddo
+
+*
+**** Linear Interpolation of HR ****************************************
+*
+         do k = 1, nkin
+            k1 = max ( 1, k-1 )
+            k2 = k1 + 1
+            do j = 1, njmax
+            do i = 1, nimax
+               x1(i,j) = ip1s(k1) * 1.
+               x2(i,j) = ip1s(k2) * 1.
+               y1(i,j) = hr_in(i,j,k1)
+               y2(i,j) = hr_in(i,j,k2)
+               xx(i,j) = pp_out(i,j,k)
+            enddo
+            enddo
+            call intlin( x1, x2, y1, y2, xx, yy, nimax, njmax )
+            do j = 1, nj
+            do i = 1, ni
+               hr_out(i,j,k) = yy(i,j)
+               if( hr_out(i,j,k) .gt. 1. ) hr_out(i,j,k) = 1.
+               if( hr_out(i,j,k) .lt. 0. ) hr_out(i,j,k) = 0.
+            enddo
+            enddo
+         enddo
+*
+**** Convert interpolated relative humidity to interpolated specific humidity **********************************
+*
+         lnps = 0.
+         modp = 0
+         do k = 1, nkin
+            do j = 1, njmax
+            do i = 1, nimax
+               work(i,j) = ip1s(k) * 100.
+               buffer(i,j) = lnps
+            enddo
+            enddo
+
+            call mhrahu( hu_out(1,1,k), hr_out(1,1,k), tt_out(1,1,k),
+     &                   work, buffer, modp, swtt, swph, 
+     &                   nimax*njmax, 1, nimax*njmax )
+         enddo
+c
+*
+**** Calculate geostrophic wind with subroutine calcug_vg **********************************************
+*
+         call calcul_vg( uvndd, pp_out, tt_out, hu_out, nimax, njmax,
+     &                   nkin, ncom, shear, nbvsuru )
+c
+c
+c uvndd(i,j,k,1) = u component
+c uvndd(i,j,k,2) = v component
+c uvndd(i,j,k,3) = ff = sqrt(u^2+v^2)
+c uvndd(i,j,k,4) = dd = direction
+c
+c
+c
+c
+*
+**** classification of wind direction in sector sect and shear **************************************
+*
+         do j = 1, njmax-1
+         do i = 1, nimax-1
+            she = 1
+            if ( shear(i,j) .ge. 0 ) she = 2
+c
+            if ( uvndd(i,j,1,4) .lt. angle(1) .or.
+     &           uvndd(i,j,1,4) .ge. angle(nsect) ) then
+               sect = 1
+            else
+               do isect = 2, nsect
+                  if ( uvndd(i,j,1,4) .ge. angle(isect-1) .and.
+     &                 uvndd(i,j,1,4) .lt. angle(isect) ) then
+                     sect = isect
+                     goto 10
+                  endif
+               enddo
+               stop
+ 10            continue
+            endif
+*
+**** Definition of wind speed classes in each wind direction class
+*
+c         do secti = 1, nsect
+c            nclassect_g(secti) = nclass
+c            classsect_g(1,secti) = v0
+c            do iclas = 2, nclassect_g(secti) -1
+c               if ( classsect_g(iclas-1,secti) .lt. seuil ) then
+c                  classsect_g(iclas,secti) = classsect_g(iclas-1,secti)+dv
+c               else
+c                  classsect_g(iclas,secti) = classsect_g(iclas-1,secti)
+c     &                                     + dv2
+c               endif
+c            enddo
+c         enddo
+c      do sect_db = 1, nsect
+c            do j_db = 1, njmax-1
+c            do i_db = 1, nimax-1
+c               nclassect(i_db,j_db,sect_db) = nclassect_g(sect_db)
+c               do iclas_db = 1, nclassect(i_db,j_db,sect_db)-1
+c                  classsect(i_db,j_db,iclas_db,sect_db) =
+c     &                                     classsect_g(iclas_db,sect_db)
+c               enddo
+c            enddo
+c            enddo
+c      enddo
+*
+**** classification of wind speed *************************************************
+**** frequency of class +1 ********************************************************
+**** sumshear + shear *************************************************************
+**** Addition of u, v, t **********************************************************
+* 
+               if ( uvndd(i,j,1,3) .lt. classsect(i,j,1,sect) ) then
+                  freqsect(i,j,1,she,sect) = freqsect(i,j,1,she,sect)
+     &                                      + 1.
+                  sumshear(i,j,1,she,sect) = sumshear(i,j,1,she,sect)
+     &                                      + shear(i,j)
+                  do k = 1, nktmp
+                     do ivar = 1, 2
+                        uuvvtt(i,j,1,she,sect,k,ivar) =
+     &                                  uuvvtt(i,j,1,she,sect,k,ivar)
+     &                                  + uvndd(i,j,k,ivar)
+                     enddo
+                     uuvvtt(i,j,1,she,sect,k,3) = tt_out(i,j,k) + 
+     &                                     uuvvtt(i,j,1,she,sect,k,3)
+                  enddo
+               else if ( uvndd(i,j,1,3) .ge.
+     &                  classsect(i,j,nclassect(i,j,sect)-1,sect) ) then
+                  iclas = nclassect(i,j,sect)
+                  freqsect(i,j,iclas,she,sect) =
+     &                              freqsect(i,j,iclas,she,sect) + 1.
+                  sumshear(i,j,iclas,she,sect) =
+     &                         sumshear(i,j,iclas,she,sect) + shear(i,j)
+                  do k = 1, nktmp
+                     do ivar = 1, 2
+                        uuvvtt(i,j,iclas,she,sect,k,ivar) =
+     &                                 uuvvtt(i,j,iclas,she,sect,k,ivar)
+     &                            + uvndd(i,j,k,ivar)
+                     enddo
+                     uuvvtt(i,j,iclas,she,sect,k,3) =
+     &                                    uuvvtt(i,j,iclas,she,sect,k,3)
+     &                                  + tt_out(i,j,k)
+                  enddo
+               else
+                  do iclas = 2, nclassect(i,j,sect)-1
+                     if ( uvndd(i,j,1,3) .ge.
+     &                                       classsect(i,j,iclas-1,sect)
+     &                    .and. uvndd(i,j,1,3) .lt.
+     &                                  classsect(i,j,iclas,sect) ) then
+                        freqsect(i,j,iclas,she,sect) =
+     &                                freqsect(i,j,iclas,she,sect) + 1.
+                        sumshear(i,j,iclas,she,sect) = 
+     &                         sumshear(i,j,iclas,she,sect) + shear(i,j)
+                        do k = 1, nktmp
+                           do ivar = 1, 2
+                              uuvvtt(i,j,iclas,she,sect,k,ivar) =
+     &                                 uuvvtt(i,j,iclas,she,sect,k,ivar)
+     &                               + uvndd(i,j,k,ivar)
+                           enddo
+                           uuvvtt(i,j,iclas,she,sect,k,3) =
+     &                                    uuvvtt(i,j,iclas,she,sect,k,3)
+     &                                  + tt_out(i,j,k)
+                        enddo
+                        goto 440
+                     endif
+                  enddo
+                  print*, 'Problem with the classsect'
+                  stop
+ 440               continue
+               endif
+         enddo
+         enddo
+c
+      ipt=14
+      jpt=13
+
+*
+**** Increment "sampling" hours *******************************************************************
+*
+ 111     continue   !for seasonal stats
+c
+         dateo = ( dateo / 10 ) * 10
+c
+         call incdat( idate, dateo, sampling )
+         result = newdate( idate, date, time, -3 )
+         hour = time / 1000000 
+         year = date / 10000 
+         month = ( date - year * 10000 ) / 100 
+         day = date - year * 10000 - month * 100
+*
+**** print the new date ***************************************************************************
+*
+         print*, 'new date: dateo, date, time=', dateo, date, time
+         print*, 'year, month, day, hour=', year, month, day, hour
+         if ( date .eq. enddate .and. time .eq. endtime ) exit
+      enddo
+*
+**** Free memory *********************************************************************************
+*
+      deallocate( gz_in, stat=status )
+      deallocate( tt_in, stat=status )
+      deallocate( hr_in, stat=status )
+      deallocate( hu_in, stat=status )
+      deallocate( pp_out, stat=status )
+      deallocate( tt_out, stat=status )
+      deallocate( hu_out, stat=status )
+      deallocate( hr_out, stat=status )
+      deallocate( work, stat=status )
+      deallocate( buffer, stat=status )
+      deallocate( x1, stat=status )
+      deallocate( x2, stat=status )
+      deallocate( y1, stat=status )
+      deallocate( y2, stat=status )
+      deallocate( xx, stat=status )
+      deallocate( yy, stat=status )
+      deallocate( uvndd, stat=status )
+
+************************************************************************************************
+**** LOOP END **********************************************************************************
+************************************************************************************************
+c
+      hundorecords = 100. / nrecords
+*
+****  No sign distinction of shear for the first class (weak wind) *****************************
+*
+         iclas = 1
+         do sect = 1, nsect
+         do j = 1, njmax-1
+         do i = 1, nimax-1
+            rtmp = sumshear(i,j,iclas,1,sect)
+     &            + sumshear(i,j,iclas,2,sect)
+            she1 = 1
+            if ( rtmp .ge. 0. ) she1 = 2
+c
+            do she = 1, nshear
+               sumshear(i,j,iclas,she,sect) = 0.
+            enddo
+            sumshear(i,j,iclas,she1,sect) = rtmp
+
+            do ivar = 1, nvar
+            do k = 1, nktmp
+               rtmp = uuvvtt(i,j,iclas,1,sect,k,ivar)
+     &               + uuvvtt(i,j,iclas,2,sect,k,ivar)
+               do she = 1, nshear
+                  uuvvtt(i,j,iclas,she,sect,k,ivar) = 0.
+               enddo
+               uuvvtt(i,j,iclas,she1,sect,k,ivar) = rtmp
+            enddo
+            enddo
+
+            rtmp = freqsect(i,j,iclas,1,sect)
+     &            + freqsect(i,j,iclas,2,sect)
+            do she = 1, nshear
+               freqsect(i,j,iclas,she,sect) = 0.
+            enddo
+            freqsect(i,j,iclas,she1,sect) = rtmp
+         enddo  
+         enddo  
+         enddo  
+*
+**** The shear is not considered if the frequency is less than 0.02% *********************
+*
+         do j = 1, njmax-1
+         do i = 1, nimax-1
+         do sect = 1, nsect
+         do iclas = 1, nclassect(i,j,sect)
+            she1 = 1
+            she2 = 2
+ 550        if ( freqsect(i,j,iclas,she1,sect) * hundorecords
+     &                                                  .lt. 0.02 ) then
+               sumshear(i,j,iclas,she2,sect) =
+     &                                     sumshear(i,j,iclas,she1,sect)
+     &                                   + sumshear(i,j,iclas,she2,sect)
+               sumshear(i,j,iclas,she1,sect) = 0.
+c
+               freqsect(i,j,iclas,she2,sect) = 
+     &                                     freqsect(i,j,iclas,she1,sect)
+     &                                   + freqsect(i,j,iclas,she2,sect)
+               freqsect(i,j,iclas,she1,sect) = 0.
+c
+               do ivar = 1, nvar
+               do k = 1, nktmp
+                  uuvvtt(i,j,iclas,she2,sect,k,ivar) =
+     &                             uuvvtt(i,j,iclas,she1,sect,k,ivar)
+     &                           + uuvvtt(i,j,iclas,she2,sect,k,ivar)
+                  uuvvtt(i,j,iclas,she1,sect,k,ivar) = 0.
+               enddo
+               enddo
+            endif
+c
+            if ( she1 .eq. 1 ) then
+               she1=2
+               she2=1
+               goto 550
+            endif
+         enddo
+         enddo
+         enddo
+         enddo
+*
+**** Calculationg means of shear and u,v and t for each class ****************************************
+*
+         do j = 1, njmax-1
+         do i = 1, nimax-1
+         do sect = 1, nsect
+         do iclas = 1, nclassect(i,j,sect)
+         do she = 1, nshear
+            if ( freqsect(i,j,iclas,she,sect) .ne. 0. ) then
+               sumshear(i,j,iclas,she,sect) = 
+     &                                      sumshear(i,j,iclas,she,sect)
+     &                                    / freqsect(i,j,iclas,she,sect)
+               do ivar = 1, nvar
+               do k = 1, nktmp
+                  uuvvtt(i,j,iclas,she,sect,k,ivar) =
+     &                                 uuvvtt(i,j,iclas,she,sect,k,ivar)
+     &                               / freqsect(i,j,iclas,she,sect)
+               enddo
+               enddo
+            else
+               sumshear(i,j,iclas,she,sect) = 0.
+               do ivar = 1, nvar
+               do k = 1, nktmp
+                  uuvvtt(i,j,iclas,she,sect,k,ivar) = 0.
+               enddo
+               enddo
+            endif
+*
+**** percentage frequency of each class ******************************************************************* 
+*
+            freqsect(i,j,iclas,she,sect) =
+     &                                      freqsect(i,j,iclas,she,sect)
+     &                                     * hundorecords
+         enddo
+         enddo
+         enddo
+         enddo
+         enddo
+
+************************************************************************************************************
+**** Write the results in STD file classes_season.fst' *****************************************************
+************************************************************************************************************
+c
+      date = byear * 10000 + bmonth * 100 + bday
+      time = bhour * 1000000 
+      result = newdate( bdateo, date, time, 3 )
+      deet = 18.5 * 86400
+      npas = ( eyear - byear + 1 ) * 2 
+      fname= trim(outdir) // '/' // trim(ofile)
+      ier = fnom( iunout, fname, 'STD+RND', 0)
+      ier = fstouv( iunout, 'STD+RND' )
+*
+**** writes the grid positions ^^ and >> ************************************************
+*
+      call hpalloc ( paxpl, nimax, ier, 1 )
+      call hpalloc ( paypl, njmax, ier, 1 )
+      call hpalloc ( paxpq, (nimax-1), ier, 1 )
+      call hpalloc ( paypq, (njmax-1), ier, 1 )
+      call getxypl
+c
+      ip1vg = nimax - 1
+      ip2vg = njmax - 1
+      ip3vg = 999
+      ip1gz = nimax
+      ip2gz = njmax
+      ip3gz = 1000
+      if ( Grd_proj_S .eq. 'P' ) then
+         grtyp = 'N'
+      else if ( Grd_proj_S .eq. 'M' .or. Grd_proj_S .eq. 'L' ) then
+         grtyp = 'E'
+      else
+         print*, 'Unknown grid projection: Grd_proj_S=', Grd_proj_S
+         stop
+      endif
+      allocate( work(nimax-1,1), stat=status )
+      allocate( buffer(nimax-1,1), stat=status )
+      do i = 1, nimax-1
+         buffer(i,1) = xpq(i)
+      enddo
+      ier = fstecr( buffer, work, -32, iunout, bdateo, deet, npas,
+     &              nimax-1, 1, 1, ip1vg, ip2vg, ip3vg, 'X', '>>',
+     &              'POSX', grtyp, g1, g2, g3, g4, 1, .true. )
+      deallocate( buffer, stat=status )
+      deallocate( work, stat=status )
+cc
+      allocate( work(njmax-1,1), stat=status )
+      allocate( buffer(njmax-1,1), stat=status )
+      do j = 1, njmax-1
+         buffer(j,1) = ypq(j)
+      enddo
+      ier = fstecr( buffer, work, -32, iunout, bdateo, deet, npas,
+     &              1, njmax-1, 1, ip1vg, ip2vg, ip3vg, 'X', '^^',
+     &              'POSY', grtyp, g1, g2, g3, g4, 1, .true. )
+      deallocate( buffer, stat=status )
+      deallocate( work, stat=status )
+c
+      allocate( work(nimax,1), stat=status )
+      allocate( buffer(nimax,1), stat=status )
+      do i = 1, nimax
+         buffer(i,1) = xpl(i)
+      enddo
+      ier = fstecr( buffer, work, -32, iunout, bdateo, deet, npas,
+     &              nimax, 1, 1, ip1gz, ip2gz, ip3gz, 'X', '>>',
+     &              'POSX', grtyp, g1, g2, g3, g4, 1, .true. )
+      deallocate( buffer, stat=status )
+      deallocate( work, stat=status )
+c
+      allocate( work(njmax,1), stat=status )
+      allocate( buffer(njmax,1), stat=status )
+      do j = 1, njmax
+         buffer(j,1) = ypl(j)
+      enddo
+      ier = fstecr( buffer, work, -32, iunout, bdateo, deet, npas,
+     &              1, njmax, 1, ip1gz, ip2gz, ip3gz, 'X', '^^',
+     &              'POSX', grtyp, g1, g2, g3, g4, 1, .true. )
+      deallocate( buffer, stat=status )
+      deallocate( work, stat=status )
+*
+**** writes the calculated values ********************************************
+*
+      allocate( work(nimax-1,njmax-1), stat=status )
+      allocate( buffer(nimax-1,njmax-1), stat=status )
+      grtyp = 'Z'
+      ig4 = 0
+c
+      tfreq = 0.
+      do sect = 1, nsect
+         if ( sect .eq. 1 ) then
+            isect = 0
+         else
+            isect = ( angle(sect-1) + angle(sect) ) * 0.5 + 0.5
+         endif
+c
+         write( iunclass, '(i2)' ) sect
+         do iclas = 1, nclassect(ipt,jpt,sect)
+         do she = 1, nshear
+            if ( freqsect(ipt,jpt,iclas,she,sect) .ne. 0. ) then
+               ff = sqrt( uuvvtt(ipt,jpt,iclas,she,sect,1,1)**2
+     &                   + uuvvtt(ipt,jpt,iclas,she,sect,1,2)**2 )
+               dd = atan2d( -uuvvtt(ipt,jpt,iclas,she,sect,1,1),
+     &                      -uuvvtt(ipt,jpt,iclas,she,sect,1,2) )
+               if ( dd .lt. 0. ) dd = dd + 360.
+               write( iunclass, 100 ) dd, ff,
+     &                sumshear(ipt,jpt,iclas,she,sect),
+     &                freqsect(ipt,jpt,iclas,she,sect),
+     &                ff * freqsect(ipt,jpt,iclas,she,sect),
+     &              ( uuvvtt(ipt,jpt,iclas,she,sect,k,1), k = 1, nkin ),
+     &              ( uuvvtt(ipt,jpt,iclas,she,sect,k,2), k = 1, nkin ),
+     &              ( uuvvtt(ipt,jpt,iclas,she,sect,k,3), k = 1, nkin )
+               tfreq = tfreq + freqsect(ipt,jpt,iclas,she,sect)
+            endif
+         enddo
+         enddo
+         print*, 'tfreq =', tfreq
+ 100  format ( 3f8.3, 1x, f7.4, 1x, f10.4, 1x, 8f8.3, 4f8.3 )
+         call int2char( csect, len(csect), isect )
+c
+         do she = 1, nshear
+         do iclas = 1, maxclassect
+            call int2char( cclas, len(cclas), iclas )
+            etiket12 = season // achar(iachar('0')+version)
+     &                 // 'D' // trim(csect) // 'C'
+     &                 // cclas // cshear(she)
+            do j = 1, njmax-1
+            do i = 1, nimax-1
+               if ( iclas .le. nclassect(i,j,sect) ) then
+                  buffer(i,j) = freqsect(i,j,iclas,she,sect)
+               else
+                  buffer(i,j) = 0.
+               endif
+            enddo
+            enddo
+c
+            ip1 = 0
+c
+            ip2 = max( 0, nint( flat_s * 100. ) + 9999 )
+            ip3 = min( 9999, nint( flat_n * 100. ) )
+c
+            ier = fstecr( buffer, work, npak, iunout, bdateo, deet,
+     &                    npas, nimax-1, njmax-1, 1, ip1, ip2, ip3,
+     &                    'A', 'FREQ', etiket12, grtyp,
+     &                    ip1vg, ip2vg, ip3vg, ig4, 1, .true. )
+c
+            do ivar = 1, nvar
+            do k = 1, nktmp
+               do j = 1, njmax-1
+               do i = 1, nimax-1
+                  if ( iclas .le. nclassect(i,j,sect) ) then
+                     buffer(i,j) = uuvvtt(i,j,iclas,she,sect,k,ivar)
+                  else
+                     buffer(i,j) = 0.
+                  endif
+               enddo
+               enddo
+               ip1 = 12001 + height(k) / 5.
+c
+c
+               ier = fstecr( buffer, work, npak, iunout, bdateo, deet,
+     &                    npas, nimax-1, njmax-1, 1, ip1, ip2, ip3,
+     &                    'A', nomvar4(ivar), etiket12, grtyp,
+     &                    ip1vg, ip2vg, ip3vg, ig4, 1, .true. )
+            enddo
+            enddo
+         enddo
+         enddo
+      enddo
+*
+****    Close the standard file ***********************************************
+****  Unlink the unit from the standard file **********************************
+*
+      ier = fstfrm(iunin)
+      ier = fclos(iunin)
+      ier = fstfrm(iunout)
+      ier = fclos(iunout)
+
+*******************************************************************************
+*******************************************************************************
+*******************************************************************************
+      stop
+      end
+
+
+
+
+

@@ -1,0 +1,251 @@
+      program prep_table
+      implicit none
+*
+**** prepares classes in .txt-files
+*
+*********************************************************************************************
+************************************************DECLARATION**********************************
+*********************************************************************************************
+      integer isect, sect, shear, iclas, i, j, k, ivar
+      integer i1, i2, di, j1, j2, dj, ipt, jpt
+      integer nsect, nshear, nclass, imx, jmx, kmx, nvar
+      parameter ( nsect=16, nshear=2, nclass=14, nvar=3, kmx=4 )
+      real dangle, angle(nsect), fshear(nshear), dd, ff
+      character (len=1) cshear(nshear)
+      character (len=4) nomvar(nvar)
+      character (len=3) csect
+      character (len=2) cclas
+      real height(kmx)
+      data cshear / 'M', 'P' /
+      data fshear / -1., 1. /
+      data nomvar / 'UU', 'VV', 'TT' /
+      data height / 0., 1500., 3000, 5500. /
+      integer version
+      parameter ( version=1 )
+      character (len=3) atlas
+!RB2018      character (len=12) etiket
+      character (len=80) ifile, ofile, outdir, fname
+      real, allocatable, dimension(:,:) :: lat, lon
+      real, allocatable, dimension(:,:) :: freq
+      real, allocatable, dimension(:,:,:,:) :: uuvvtt
+      real, allocatable, dimension(:,:,:,:,:,:) :: aline
+      character(len=12), allocatable, dimension(:,:,:) :: id
+      integer col, cols, simx, sjmx
+      integer status
+      character (len=3) ci, cj
+      integer ier, iunin, iunout, ni, nj, nk
+      parameter ( iunin=1, iunout=2 )
+      integer ip1
+      integer fstlir, fstinf, fnom, fstouv, fclos, fstfrm, fstprm
+      external fstlir, fstinf, fnom, fstouv, fclos, fstfrm, fstprm
+      integer key, dateo, deet, npas, nbits, datyp, ip2, ip3, ig1, ig2,
+     &        ig3, ig4, swa, lng, dltf, ubc, extra1, extra2, extra3
+      character*1 typvar, grtyp
+      character*4 nomvar1
+      character*12 etiket
+      real flat_s, flat_n, flat0
+!RB 2018 <
+      real *8 atan2d, rad2deg
+      real xxx, yyy
+      atan2d(xxx,yyy)=atan2(xxx,yyy)*rad2deg
+!RB 2018 >
+*
+**** read parameter *****************************************************************
+*
+      rad2deg=dble(180.0)/(2*asin(dble(1.0)))  !RB 2018 for atan
+      read ( *, '(a)' ) atlas
+      read ( *, * ) i1, i2, di
+      read ( *, * ) j1, j2, dj
+      read ( *, '(a)' ) ifile
+      read ( *, '(a)' ) outdir
+      read ( *, '(a)' ) ofile
+*
+**** open input file **************************************************************
+*
+      ier = fnom( iunin, ifile, 'STD+RND', 0 )
+      ier = fstouv( iunin, 'STD+RND' )
+c
+      key = fstinf( iunin, ni, nj, nk, -1, '', -1, -1, -1, '',
+     &                 'FREQ' )
+      ier = fstprm( key, dateo, deet, npas, ni, nj, nk, nbits,
+     &              datyp, ip1, ip2, ip3, typvar, nomvar1, etiket,
+     &              grtyp, ig1, ig2, ig3, ig4, swa, lng, dltf,
+     &              ubc, extra1, extra2, extra3 )
+c
+      flat_s = ( ip2 - 10000 ) / 10.
+      flat_n = ( ip3 - 10000 ) / 10.
+c
+c
+      imx = ni
+      jmx = nj
+      allocate( freq(imx,jmx), stat=status )
+*
+**** read LAT LON ****************************************************
+*
+      allocate( lat(imx,jmx), stat=status )
+      allocate( lon(imx,jmx), stat=status )
+      ier = fstlir( lat, iunin, ni, nj, nk, -1, '',
+     &                    -1, -1, -1, '', 'LA' )
+      ier = fstlir( lon, iunin, ni, nj, nk, -1, '',
+     &                    -1, -1, -1, '', 'LO' )
+*
+**** keep only two decimal ********************************************
+*
+      do j = 1, jmx
+      do i = 1, imx
+         lat(i,j) = nint(lat(i,j)*100.) / 100.
+         lon(i,j) = nint(lon(i,j)*100.) / 100.
+      enddo
+      enddo
+c
+      allocate( uuvvtt(imx,jmx,kmx,nvar), stat=status )
+      cols = 5 + nvar*kmx
+      simx = ( i2 - i1 ) / di + 1
+      sjmx = ( j2 - j1 ) / dj + 1
+      allocate( aline(cols,nshear,nclass,nsect,simx,sjmx), stat=status )
+      allocate( id(nshear,nclass,nsect), stat=status )
+      do j = 1, sjmx
+      do i = 1, simx
+      do sect = 1, nsect
+      do iclas = 1, nclass
+      do shear = 1, nshear
+      do col = 1, cols
+         aline(col,shear,iclas,sect,i,j) = -1.
+      enddo
+      enddo
+      enddo
+      enddo
+      enddo
+      enddo
+*
+**** defines angle ******************************************************* 
+*
+      dangle = 360. / nsect
+      angle(1) = 0.
+      do sect = 2, nsect
+         angle(sect) = angle(sect-1 ) + dangle
+         print*, 'sect, angle=', sect, angle(sect)
+      enddo
+
+      do sect = 1, nsect
+         isect = angle(sect) + 0.5
+c
+         print*, 'sect, isect=', sect , isect
+c
+****************************************************************************************
+**** LOOP writes table.txt-files *******************************************************
+****************************************************************************************
+c
+         call int2char( csect, len(csect), isect )
+c
+         do iclas = 1, nclass
+            call int2char( cclas, len(cclas), iclas )
+         do shear = 1, nshear
+            etiket = atlas // achar(iachar('0')+version)
+     &               // 'D' // trim(csect) // 'C'
+     &               // cclas // cshear(shear)
+            id(shear,iclas,sect) = etiket
+c
+            print*, 'etiket=', etiket
+c
+            ier = fstlir( freq, iunin, ni, nj, nk, -1, etiket,
+     &                    -1, -1, -1, '', 'FREQ' )
+            do ivar = 1, nvar
+            do k = 1, kmx
+               ip1 = 12001 + height(k) / 5.
+c
+      print*, 'k, height(k), ip1=', k, height(k), ip1
+c
+               ier = fstlir( uuvvtt(1,1,k,ivar), iunin, ni, nj, nk,
+     &                       -1, etiket, ip1, -1, -1, '', nomvar(ivar) )
+            enddo
+            enddo
+c
+            do jpt = j1, j2, dj
+            do ipt = i1, i2, di
+               i = ( ipt -i1 ) / di + 1
+               j = ( jpt -j1 ) / dj + 1
+               if ( freq(ipt,jpt) .gt. 1.e-06 ) then
+                  ff = sqrt( uuvvtt(ipt,jpt,1,1)**2
+     &                   + uuvvtt(ipt,jpt,1,2)**2 )
+                  dd = atan2d( -uuvvtt(ipt,jpt,1,1),
+     &                         -uuvvtt(ipt,jpt,1,2) )
+                  if ( dd .lt. 0. ) dd = 360. + dd
+                  aline(1,shear,iclas,sect,i,j) = dd
+                  aline(2,shear,iclas,sect,i,j) = ff
+                  aline(3,shear,iclas,sect,i,j) = fshear(shear)
+                  aline(4,shear,iclas,sect,i,j) = freq(ipt,jpt)
+                  aline(5,shear,iclas,sect,i,j) = ff * freq(ipt,jpt)
+                  do ivar = 1, nvar
+                  do k = 1, kmx
+                     aline(5+k+(ivar-1)*kmx,shear,iclas,sect,i,j)
+     &                     = uuvvtt(ipt,jpt,k,ivar)
+                  enddo
+                  enddo
+               endif
+            enddo
+            enddo
+         enddo
+         enddo
+      enddo
+*
+**** opens output files *******************************************************************************
+*
+      do jpt = j1, j2, dj
+      do ipt = i1, i2, di
+         i = ( ipt -i1 ) / di + 1
+         j = ( jpt -j1 ) / dj + 1
+         write( ci, '(i3)' ) ipt
+         write( cj, '(i3)' ) jpt
+         fname = trim(outdir) // '/' // trim(adjustl(cj)) // '/'
+     &           // trim(adjustl(ci)) // '_' // trim(ofile)
+         print*, 'fname=', fname
+         open ( iunout, file=fname, status='new', iostat=ier )
+         if ( ier .ne. 0 ) then
+            print*, 'Problem in opening the file, ier=', ier
+            stop
+         endif
+*
+****   writes header **********************************************************************************
+*
+         flat0 = lat(ipt,jpt)
+         if ( flat_s .ge. -90. .or. flat_n .le. 90. ) then
+            if ( lat(ipt,jpt).lt.0. .and. lat(ipt,jpt).ge.flat_s ) then
+               flat0 = flat_s
+            else if ( lat(ipt,jpt) .ge. 0. .and.
+     &                lat(ipt,jpt) .le. flat_n ) then
+               flat0 = flat_n
+            else
+               flat0 = lat(ipt,jpt)
+            endif
+         endif
+         write( iunout, 1000 ) 'I:', ipt, 'J:', jpt, 'Latitude:',
+     &                         lat(ipt,jpt), 'Longitude:', lon(ipt,jpt),
+     &                         'FLAT0:', flat0
+ 1000 format( a2, 1x, i3, 1x, a2, 1x, i3, 1x, a9, 1x, f8.3, 1x, a10, 1x,
+     &        f8.3, 1x a6, 1x, f8.3 )
+*
+**** writes vaelues sorted by wind direction sector ******************************************************
+*
+         do sect = 1, nsect
+            write( iunout, '(i2)' ) sect 
+            do iclas = 1, nclass
+            do shear = 1, nshear
+               if ( aline(1,shear,iclas,sect,i,j) .ne. -1. ) then
+                  write( iunout, 100 ) id(shear,iclas,sect),
+     &                ( aline(col,shear,iclas,sect,i,j), col = 1, cols )
+               endif
+            enddo
+            enddo
+         enddo
+         close ( iunout )
+      enddo
+      enddo
+ 100  format ( a12, 1x, 3(1x,f8.3), 1x, f7.4, 1x, f10.4, 1x,
+     &         8(1x,f8.3), 4f8.3 )
+c
+***************************************************************************************************
+***************************************************************************************************
+***************************************************************************************************
+      stop
+      end

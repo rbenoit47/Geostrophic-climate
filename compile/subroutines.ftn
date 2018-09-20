@@ -1,0 +1,620 @@
+************************************************************************************************
+****************************SUBROUTINES*********************************************************
+************************************************************************************************
+      subroutine intlin(x1,x2,y1,y2,xx,yy,nimax,njmax)
+      implicit none
+*
+**** linear Interpolation **********************************************************************
+*
+
+
+      integer nimax,njmax,i,j
+      real aa,bb
+      real x1(nimax,njmax),x2(nimax,njmax),y1(nimax,njmax),
+     $     y2(nimax,njmax),xx(nimax,njmax),yy(nimax,njmax)
+
+      do i=1,nimax
+         do j=1,njmax
+            
+            aa=(y2(i,j)-y1(i,j))/(x2(i,j)-x1(i,j))
+            bb=y1(i,j)-aa*x1(i,j)
+            yy(i,j)=aa*xx(i,j)+bb
+
+         enddo
+      enddo
+
+
+      return
+      end
+c##############################################################################################
+      subroutine gz2vg_cfg_
+      implicit none
+*
+**** import namelists *************************************************************************
+*
+
+#include "constants/gz2vg.cdk"
+#include "constants/grid.cdk"
+c
+      integer unnml, k, status
+      parameter ( unnml = 10 )
+      character*80 nml, nmlname
+c
+      namelist /gz2vg_cfg/ ip1s, height, method, shearvec, byear,
+     &                     bmonth, bday, bhour, sampling, eyear,
+     &                     emonth, eday, ehour, region, indir, outdir,
+     &                     ofile, swtt, swph, nofc, noms, nsect,
+     &                     nclass, classes, season, version,
+     &                     generalclas, flat_s, flat_n
+c
+      namelist /grid_cfg/ Grd_proj_S, Grd_ni, Grd_nj,
+     &                    Grd_iref, Grd_jref, Grd_latr, Grd_lonr,
+     &                    Grd_dx, Grd_dgrw, Grd_phir,
+     &                    Grd_xlat1, Grd_xlon1, Grd_xlat2, Grd_xlon2
+
+c
+      do k = 1, maxlevels
+         ip1s(k) = -1
+         height(k) = -1.
+      end do
+c
+      do k = 1, maxclasses
+         classes(k) = -1.
+      end do
+c
+      flat_s = -100.
+      flat_n = 100.
+c
+      nml='class_settings.nml'
+      open ( unnml, file=nml, access='sequential',
+     &       form='formatted', status='old', iostat=status )
+      if ( status .ne. 0 ) then
+         print *, 'FILE ', trim(nml), ' NOT FOUND'  !RB 2018
+         stop
+      endif
+c
+      nmlname = 'grid_cfg'
+      rewind ( unnml ) 
+      read ( unnml, nml=grid_cfg, end=9119 ) 
+      write ( 6, nml=grid_cfg )
+ 9119 continue
+c
+      nmlname = 'gz2vg_cfg'
+      rewind ( unnml ) 
+      read ( unnml, nml=gz2vg_cfg, end=9120 ) 
+      write ( 6, nml=gz2vg_cfg )
+ 9120  continue
+c
+      close ( unnml )
+      return
+      end
+c##########################################################################################
+      subroutine calcul_vg( uvndd, pp, tt, hu, nimax, njmax, nkmax,
+     &                      ncom, shear, nbvsuru )
+      implicit none
+*
+**** calculates geostrophic wind *********************************************************
+*
+      integer nimax, njmax, nkmax, ncom
+      real pp(nimax,njmax,nkmax), tt(nimax,njmax,nkmax),
+     &     hu(nimax,njmax,nkmax)
+      real uvndd(nimax-1,njmax-1,nkmax,ncom)
+      real shear(nimax-1,njmax-1), p0bar(nimax-1,njmax-1)
+      real nbvsuru(nimax-1,njmax-1), tetabar(nimax-1,njmax-1,nkmax)
+      real hubar, ttbar, ppbar, fbar, p25, p5, diftetabar
+      parameter ( p25=0.25, p5=0.5 )
+      integer i, j, k, com
+      real f(nimax-1,njmax-1), s(nimax-1,njmax-1)
+      real odx, ody
+      real*8 d2r, c
+!RB 2018 <
+      real *8 atan2d, rad2deg
+      real xxx, yyy
+      atan2d(xxx,yyy)=atan2(xxx,yyy)*rad2deg
+!RB 2018 >
+      real deltay,angle,cos_angle,sin_angle
+      real pi, ratm, vgbarz
+      integer ipt, jpt
+      parameter ( ipt=14, jpt=13 )
+c
+#include "constants/const.cdk"
+#include "constants/gz2vg.cdk"
+#include "constants/grid.cdk"
+c
+      rad2deg=dble(180.0)/(2*asin(dble(1.0)))  !RB 2018 for atan
+      pi=acos(-1.)
+      deltay = rayt * 2.5 * pi / 180.
+c
+      d2r = pi_8 / 180.0d0
+c
+      call fcorsm3_wyu( f, s, nimax-1, njmax-1 )
+c
+      do j = 1, njmax-1
+      do i = 1, nimax-1
+         p0bar(i,j) = ( pp(i,j,1)   + pp(i+1,j,1) +
+     &                  pp(i,j+1,1) + pp(i+1,j+1,1) ) * p25
+      enddo
+      enddo
+c
+      do k = 1, nkmax
+      do j = 1, njmax-1
+      do i = 1, nimax-1
+         hubar = ( hu(i,j,k)   + hu(i+1,j,k) +
+     &             hu(i,j+1,k) + hu(i+1,j+1,k) ) * p25
+         ttbar = ( tt(i,j,k)   + tt(i+1,j,k) +
+     &             tt(i,j+1,k) + tt(i+1,j+1,k) ) * p25
+         ppbar = ( pp(i,j,k)   + pp(i+1,j,k) +
+     &             pp(i,j+1,k) + pp(i+1,j+1,k) ) * p25
+         tetabar(i,j,k) = ttbar * ( p0bar(i,j) / ppbar ) ** cappa
+c
+         fbar = f(i,j)
+c
+         if ( Grd_proj_S .eq. 'P' .or. Grd_proj_S .eq. 'M' )  then
+            odx = 1.0d0 / dble( Grd_dx )
+            ody = odx
+         else if ( Grd_proj_S .eq. 'L' )  then
+            c = rayt_8 * dble( Grd_dx * d2r )
+c
+            odx = 1.0d0 / ( dsqrt( dble(s(i,j) )) * c )  !RB 2018
+c
+            ody = 1.0d0 / c
+         else
+            print*, 'Unkown projection, Grd_proj_S=', Grd_proj_S
+            stop
+         endif
+c
+         ratm = ( hubar * re + ra ) / ( hubar + 1. )
+c
+         uvndd(i,j,k,1) = -ratm / fbar * ttbar / ppbar * 
+     &                    ( pp(i+1,j+1,k) - pp(i+1,j,k) +
+     &                      pp(i,j+1,k) - pp(i,j,k) ) * p5 * ody
+         uvndd(i,j,k,2) = ratm / fbar * ttbar / ppbar * 
+     &                    ( pp(i+1,j+1,k) - pp(i,j+1,k) +
+     &                      pp(i+1,j,k) - pp(i,j,k) ) * p5 * odx
+c
+         uvndd(i,j,k,3) = sqrt( uvndd(i,j,k,1)**2 + uvndd(i,j,k,2)**2 )
+         uvndd(i,j,k,4) = atan2d( -uvndd(i,j,k,1), -uvndd(i,j,k,2) )
+         if ( uvndd(i,j,k,4) .lt. 0. ) then
+            uvndd(i,j,k,4) = uvndd(i,j,k,4) + 360.
+         endif
+      enddo
+      enddo
+      enddo
+c
+      do j = 1, njmax-1
+      do i = 1, nimax-1
+*
+**** Calculation of shear=vg1500-vg0
+*
+         if ( .not. shearvec ) then
+            shear(i,j) = uvndd(i,j,2,3)-uvndd(i,j,1,3)
+         else
+            shear(i,j) = ( uvndd(i,j,1,1) * uvndd(i,j,2,1) +
+     &                     uvndd(i,j,1,2) * uvndd(i,j,2,2) ) /
+     &                     uvndd(i,j,1,3) - uvndd(i,j,1,3)  
+c
+c           ! = (u0*u1500+v0*v1500)/ug0 - ug0
+         endif
+*
+**** Calculation of the Brundt-Vaisala number / Vg a 750m au point V ********************
+*
+c
+         diftetabar = alog( tetabar(i,j,2) ) - alog( tetabar(i,j,1) )
+         if ( diftetabar .lt. 0. ) then
+            nbvsuru(i,j)=0.               !Evolution negative de tetabar
+         else
+            vgbarz = ( uvndd(i,j,1,3) + uvndd(i,j,2,3) ) * p5
+            nbvsuru(i,j) = sqrt( grav * diftetabar /
+     &                           (height(2)-height(1)) ) /
+     &                     vgbarz                   !nb B-V / Vg  a 750m
+         endif
+c
+      enddo
+      enddo
+c
+      return
+      end
+
+c#######################################################################################
+      subroutine fcorsm3_wyu ( f, s, ni, nj )
+      implicit none
+*
+      integer ni,nj
+      real f(ni,nj), s(ni,nj)
+c
+*
+**** computes the coriolis parameter and stores it in f ************************************
+**** computes the map scale factor and stores it in s. *************************************
+*
+#include "constants/grid.cdk"
+#include "constants/const.cdk"
+#include "constants/gz2vg.cdk"
+#include "constants/xypl.cdk"
+      character*1 grdtyp
+*
+      integer ier
+      integer i, j, gid, ezgdef_fmem, err, gdll, gdrls
+      real*8 latref, rot, two, three, c1
+      parameter ( two=2.d0, three=3.d0  )
+      real xps, yps, lat, lon
+      real xr, yr
+      real*8 c2, c3, d2r, d60, xpos, ypos, a2, a3, a4, a5
+      parameter ( a2=1000.0d0, a3=180.0d0, a4=2.0d0, a5=90.0d0 )
+      real, allocatable, dimension(:,:) :: deglat, deglon
+      integer status
+c
+      latref = pi_8 / three
+      rot    = two * omega_8
+      d2r    = pi_8 / a3
+*
+c      call hpalloc ( paxpl, ni, ier, 1 )
+c      call hpalloc ( paypl, nj, ier, 1 )
+      call hpalloc ( paxpq, ni, ier, 1 )
+      call hpalloc ( paypq, nj, ier, 1 )
+c
+      allocate( deglat(ni,nj), stat=status )
+      allocate( deglon(ni,nj), stat=status )
+c
+      d60 = dble(Grd_dx)
+c
+      call getxypl
+c
+      if ( Grd_proj_S .eq. 'P' ) then
+         do j = 1, nj
+         do i = 1, ni
+            call llfxy( lat, lon, xpq(i), ypq(j), Grd_dx, Grd_dgrw, 0 )
+            s(i,j) = ( (1.+sin(latref) ) / (1.+sin(lat*d2r)) )**2.
+c
+            f(i,j) = rot * sin( lat * d2r )
+            if ( flat_s .ge. -90. .or. flat_n .le. 90. ) then
+               if ( lat .lt. 0. .and. lat .ge. flat_s ) then
+                  f(i,j) = rot * sin( flat_s * d2r )
+               else if ( lat .ge. 0. .and. lat .le. flat_n ) then
+                  f(i,j) = rot * sin( flat_n * d2r )
+               else
+                  f(i,j) = rot * sin( lat * d2r )
+               endif
+            endif
+c
+         end do
+         end do
+         call cxgaig( grdtyp, g1, g2, g3, g4, 0., 0., 1000., Grd_dgrw )
+      else if ( (Grd_proj_S .eq. 'M') .or. (Grd_proj_S .eq. 'L') ) then
+         call cxgaig ( 'E', g1, g2, g3, g4, Grd_xlat1, Grd_xlon1,
+     &                                      Grd_xlat2, Grd_xlon2 )
+         gid = ezgdef_fmem( ni, nj, 'Z', 'E', g1, g2, g3, g4, xpq, ypq )
+         err = gdll( gid, deglat, deglon )
+         err = gdrls( gid )
+         if ( Grd_proj_S .eq. 'M' ) then
+            do j = 1, nj
+            do i = 1, ni
+               s(i,j) = ( cos(Grd_phir*d2r) / cos(ypq(j)*d2r) )**2.
+            end do
+            end do
+         else
+            do j = 1, nj
+            do i = 1, ni
+               s(i,j) = cos(ypq(j)*d2r)**2.
+            end do
+            end do
+         endif
+c
+         do j=1,nj
+         do i=1,ni
+c
+            f(i,j) = rot * sin(deglat(i,j)*d2r)
+            if ( flat_s .ge. -90. .or. flat_n .le. 90. ) then
+               if ( deglat(i,j).lt.0. .and. deglat(i,j).ge.flat_s ) then
+                  f(i,j) = rot * sin( flat_s * d2r )
+               else if ( deglat(i,j).ge.0.
+     &                  .and. deglat(i,j).le.flat_n ) then
+                  f(i,j) = rot * sin( flat_n * d2r )
+               else
+                  f(i,j) = rot * sin( deglat(i,j) * d2r )
+               endif
+            endif
+c
+         end do
+         end do
+      else
+         print*, 'Unkown projection, Grd_proj_S=', Grd_proj_S 
+         stop
+      endif
+c
+      call hpdeallc( paxpq, ier, 1 )
+      call hpdeallc( paypq, ier, 1 )
+*
+      if( nofc ) then
+         do j = 1, nj
+         do i = 1, ni
+            f(i,j) = 0.0
+         end do
+         end do
+      endif   
+c
+      if( noms ) then
+         do j = 1, nj
+         do i = 1, ni
+            s(i,j) = 1.0
+         end do
+         end do
+      endif
+c
+      deallocate( deglat, stat=status )
+      deallocate( deglon, stat=status )
+*
+*---------------------------------------------------------------------
+      return
+      end
+c#####################################################################################
+
+      subroutine getxypl
+      implicit none
+c
+*
+**** calcualtes the x and y positions for every projection ****************************
+*
+#include "constants/const.cdk"
+#include "constants/xypl.cdk"
+#include "constants/grid.cdk"
+**
+      character*1 grdtyp
+      integer ier, ni1, nj1, i, j, ezsetopt
+      real xr,yr
+      real*8 dayfrac, d2r, c1, c2, c3, d60, xpos, ypos
+      real*8 a1, a2, a3, a4, a5
+      parameter ( a1=2000.0d0, a2=1000.0d0, a3=180.0d0, 
+     &            a4=2.0d0, a5=90.0d0 )
+*
+*---------------------------------------------------------------------
+*
+      ni1 = Grd_ni 
+      nj1 = Grd_nj
+*
+      call hpalloc ( paxpl, ni1, ier, 1 )
+      call hpalloc ( paypl, nj1, ier, 1 )
+      call hpalloc ( paxpq, (ni1-1), ier, 1 )
+      call hpalloc ( paypq, (nj1-1), ier, 1 )
+*      
+*     *** Positional parameters for f and q points
+*
+      d2r = dble( pi_8 ) / a3
+      d60 = dble( Grd_dx )
+*
+      grdtyp=' '  !  to trap invalid cases
+*      
+      if ( Grd_proj_S .eq. 'P' ) then ! Polar stereographic projection
+*
+         grdtyp = 'N'
+         call xyfll( xr, yr, Grd_latr, Grd_lonr, Grd_dx, Grd_dgrw, 1 )
+         xref  = ( dble(xr) - dble( Grd_iref - 1. ) ) * d60 / a2
+         yref  = ( dble(yr) - dble( Grd_jref - 1. ) ) * d60 / a2
+         xpos  = xref  
+         ypos  = yref
+         call xpyp_n( xpl, ypl, xpos, ypos, 0, 0, d60, ni1, nj1 )
+         xpos  = xref + d60/a2
+         ypos  = yref + d60/a2
+         call xpyp_n ( xpq, ypq, xpos, ypos, 0,0,d60,ni1-1,nj1-1)
+         call cxgaig( grdtyp, g1, g2, g3, g4, 0., 0., 1000., Grd_dgrw )
+c
+      endif
+c
+      if ( Grd_proj_S .eq. 'M' ) then ! Mercator projection
+c
+         grdtyp = 'E'
+         c2 = dble( rayt_8 ) / a2 * cos( dble(Grd_phir) * d2r ) * d2r
+         c1 = d60 / a2 / c2
+         c2 = a4 / d2r
+         c3 = c1 * d2r 
+         xref = dble( Grd_lonr ) + ( dble( 1. - Grd_iref ) ) * c1
+         yref = c2 * atan( tan( dble(Grd_latr+90.) / c2 ) * exp( c3 *
+     &          ( dble( 1. - Grd_jref ) ) ) ) - a5
+         xpos  = xref
+         ypos  = yref
+         call xpyp_m( xpl, ypl, xpos, ypos, 0, 0, c1, ni1, nj1 )
+         xpos = dble(Grd_lonr) + (dble(2-Grd_iref)) * c1
+         ypos = c2*atan(tan(dble(Grd_latr+90.)/c2)*exp(c3*
+     $          (dble(2-Grd_jref)) ))-a5
+         call xpyp_m (xpq,ypq,xpos,ypos,0,0,c1,ni1-1,nj1-1)
+         call cxgaig( grdtyp, g1, g2, g3, g4, Grd_xlat1, Grd_xlon1,
+     &                                        Grd_xlat2, Grd_xlon2 )
+c
+      endif
+c
+      if (Grd_proj_S.eq.'L') then ! Spherical
+c
+         grdtyp = 'E'
+         c1   = Grd_dx    ! directly in degree lat-lon
+         xref = dble(Grd_lonr) + (dble(1-Grd_iref)) * c1
+         yref = dble(Grd_latr) + (dble(1-Grd_jref)) * c1
+         xpos  = xref
+         ypos  = yref
+         call xpyp_l( xpl, ypl, xpos, ypos, 0, 0, c1, ni1, nj1 )
+c
+         xpos = dble(Grd_lonr) + (dble(1.5-Grd_iref)) * c1
+         ypos = dble(Grd_latr) + (dble(1.5-Grd_jref)) * c1
+c
+         call xpyp_l (xpq,ypq,xpos,ypos,0,0,c1,ni1-1,nj1-1)
+         call cxgaig( grdtyp, g1, g2, g3, g4, Grd_xlat1, Grd_xlon1,
+     &                                        Grd_xlat2, Grd_xlon2 )
+c
+      endif
+c
+      if ( grdtyp .eq. ' ' ) then
+         print *, 'S/R getxypl.  IMPROPER GRID TYPE. Grd_proj = ',
+     $        Grd_proj_S
+         stop
+      endif
+*
+*--------------------------------------------------------------------
+      return
+      end
+
+c###############################################################################
+copyright (C) 2001  MSC-RPN COMM  %%%MC2%%%
+c
+      subroutine xpyp_l (xp,yp,xr,yr,ofi,ofj,delta,ni,nj)
+      implicit none
+*
+**** calculates x and y for Spherical ******************************************
+* 
+      integer ni,nj,ofi,ofj
+      real xp(ni),yp(nj)
+      real*8 xr,yr,delta,xp_8(ni),yp_8(nj)
+**
+      integer i,j
+      real*8 con
+*
+      con = delta
+*
+      xp_8(1) = xr
+      do i=1,ofi
+         xp_8(1) = xp_8(1) + con
+      end do
+      if (xp_8(1).lt.0.d0) xp_8(1)=xp_8(1)+360.
+      do i=2,ni
+         xp_8(i) = xp_8(i-1) + con
+      end do
+      do i=1,ni
+         xp(i) = xp_8(i)
+      end do
+*
+      yp_8(1) = yr
+      do j=1,ofj
+         yp_8(1) = yp_8(1) + con
+      end do
+      do j=2,nj
+         yp_8(j) = yp_8(j-1) + con
+      end do
+      do j=1,nj
+         yp(j) = yp_8(j)
+      end do
+*
+      return
+      end
+c###################################################################################
+copyright (C) 2001  MSC-RPN COMM  %%%MC2%%%
+*
+      subroutine xpyp_m (xp,yp,lonref,latref,ofi,ofj,con,ni,nj)
+      implicit none
+*
+*** calculates x and y for Mercator projection *************************************
+*
+      integer ni,nj,ofi,ofj
+      real xp(ni),yp(nj)
+      real*8 lonref,latref,con
+**
+#include "constants/const.cdk"
+      integer i,j
+      real*8 c2,c3,d2r
+
+      d2r = dble(pi_8) / 180.
+      c2  = 2. / d2r
+      c3  = con * d2r  
+*    
+      do i=1,ni
+         xp(i)=lonref + dble(i+ofi-1) * con
+         if (xp(i).lt.0.) xp(i)=xp(i)+360.
+      end do
+      do j=1,nj
+         yp(j)=c2*atan(tan((latref+90.)/c2)*exp(c3*dble(j+ofj-1)))-90.
+      end do
+*
+      return
+      end
+c####################################################################################
+copyright (C) 2001  MSC-RPN COMM  %%%MC2%%%
+*
+      subroutine xpyp_n (xp,yp,xr,yr,ofi,ofj,d60,ni,nj)
+      implicit none
+*
+*** calculates x and y for Polar stereographic projection *****************************
+*
+      integer ni,nj,ofi,ofj
+      real xp(ni),yp(nj)
+      real*8 xr,yr,d60
+**
+      integer i,j
+      real*8 con
+
+      con = d60 / 1000.
+*
+      xp(1) = xr
+      do i=1,ofi
+         xp(1) = xp(1) + con
+      end do
+      do i=2,ni
+         xp(i) = xp(i-1) + con
+      end do
+*
+      yp(1) = yr
+      do j=1,ofj
+         yp(1) = yp(1) + con
+      end do
+      do j=2,nj
+         yp(j) = yp(j-1) + con
+      end do
+*
+      return
+      end
+c####################################################################################
+      subroutine int2char( char_int, len_char, int4 )
+*
+**** converts int to char ************************************************************
+*
+
+      implicit none
+c
+      integer len_char, int4
+      character(len=len_char) char_int
+c
+      character(len=1) sign
+      integer len_zero, num_len, i, digit, number
+      character(len=len_char) czero, cint
+c
+      if ( int4 .eq. 0 ) then
+         char_int = ''
+         do i = 1, len_char
+            char_int = trim(char_int) // '0'
+         enddo
+      else
+         sign = '+'
+         number = int4
+         if ( int4 .lt. 0 ) then
+            sign = '-'
+            number = -1 * int4
+         endif
+c
+         cint = ''
+         num_len = log10(1.*number) + 1
+         do i = num_len, 1, -1
+            digit = number / ( 10**(i-1.) )
+            cint = trim(cint) // achar(iachar('0')+digit)
+            number = number - digit * 10**(i-1.)
+         enddo
+c
+         len_zero = len_char - num_len
+         if ( len_zero .lt. 0 ) then
+            print*, 'len_char is too small'
+            stop
+         endif
+         if ( sign .eq. '-' ) len_zero = len_zero - 1
+         czero = ''
+         do i = 1, len_zero
+            czero = trim(czero) // '0'
+         enddo
+c
+         if ( sign .eq. '+' ) then
+            char_int = trim(czero) // trim(cint)
+         else
+            char_int = '-' // trim(czero) // trim(cint)
+         endif
+      endif
+c
+      return
+      end
+
+
+
+
+

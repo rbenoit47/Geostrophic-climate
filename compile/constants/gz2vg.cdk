@@ -1,0 +1,28 @@
+      integer maxlevels
+      parameter ( maxlevels=50 )
+      integer ip1s(maxlevels)
+      real height(maxlevels)
+      character (len=20) method     ! "hydrostatic" or "linear"
+      logical shearvec, swtt, swph, nofc, noms, generalclas
+      integer byear, bmonth, bday, bhour, sampling
+      integer eyear, emonth, eday, ehour
+      character (len=80) indir, outdir, ofile
+      character (len=2) region
+      character (len=3) season
+      integer version
+      real flat_s, flat_n
+c
+      integer nsect
+      integer maxclasses, nclass
+      parameter ( maxclasses=30 )
+      real classes(maxclasses)
+c
+      common /gz2vg_i/ ip1s, byear, bmonth, bday, bhour, sampling,
+     &                 eyear, emonth, eday, ehour, nsect, nclass,
+     &                 version
+c
+      common /gz2vg_r/ height, classes, flat_s, flat_n
+c
+      common /gz2vg_c/ method, indir, outdir, ofile, region, season
+c
+      common /gz2vg_l/ shearvec, swtt, swph, nofc, noms, generalclas
