@@ -3,7 +3,7 @@
 # RB
 # 2018
 #
-#	First compile the code and make the two executables
+#	Compile the classification code and make the two executables (*.Abs)
 #
 ############################################################################
 #
@@ -21,7 +21,7 @@ r.compile -src subroutines.ftn gz2vg2.ftn -o $GZ2VG -librmn rmn_016.2 -libappl p
 #
 rm -f  *.f *.o
 #
-r.compile -src prep_table.ftn subroutines.ftn -o $PREP_TABLE -librmn rmn_016.2 2>&1 1>>${Compile_log}  #
+r.compile -src prep_table.ftn subroutines.ftn -o $PREP_TABLE -librmn rmn_016.2 2>&1 | tee -a ${Compile_log}  #
 #
 rm -f  *.f *.o
 #
@@ -29,4 +29,11 @@ echo -e "\nexecutables created"
 echo -e "\n======================="
 ls -al *.Abs
 echo -e "=======================\n"
+#
+Here=`pwd`
+mkdir -p ../runs  #in case not yet present
+cd ../runs
+ln -sfn ../compile/gz2vg.Abs
+ln -sfn ../compile/prep_table.Abs
+cd $Here
 
