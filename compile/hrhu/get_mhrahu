@@ -1,6 +1,14 @@
-dir38=~/classification/2017-test/v_3.8
-dircompile=~/classification/compile
+
+#  here we are two levels below main classification directory
+Here=`pwd`
+dir38=$Here/../../tars/v_3.8
+dircompile=$Here/..
 PHY_RCS=${dir38}/RCS:3.8
+#
+pushd ../../tars
+tar -xzf phy_38.tgz
+popd
+#
 rm -rf work
 mkdir work
 cd work
@@ -14,8 +22,10 @@ rm libphy.a
 ar rcs libphy.a *.o
 make clean
 #
+set -x
 here=`pwd`
 pushd $dircompile
 ln -sfn $here/libphy.a 
 popd
+#
 
