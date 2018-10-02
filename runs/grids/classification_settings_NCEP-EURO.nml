@@ -1,0 +1,6 @@
+ &grille
+  Grd_ni  = 29 , Grd_nj  = 28, Grd_dx= 2.5,
+  Grd_iref= 13, Grd_jref= 9, Grd_latr= 40. , Grd_lonr= 180.
+  Grd_proj_S= 'L', Grd_phir= 0.0 , Grd_dgrw= 0.0
+  Grd_xlat1= 0., Grd_xlon1=10.,Grd_xlat2= 0., Grd_xlon2=  100.,
+ /

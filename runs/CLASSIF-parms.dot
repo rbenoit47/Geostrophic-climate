@@ -1,0 +1,58 @@
+#
+# parameters settings for the classification of WEST
+# adjust accordingly
+#  RB 2018
+# this is a sourceable file required by the two classification run scripts:
+# RA-to-FREQS.ksh  and FREQS-to-TABLES.ksh  
+#  a sourceable file is a file that one can source:
+#  i.e.  source file or . file  :  
+#        this adds variables to the environment of the calling script
+#
+GZ2VG=gz2vg.Abs
+PREP_TABLE=prep_table.Abs
+Processing_log=processing.log
+PATH=.:$PATH
+Here=`pwd`
+#
+# Input directory of the climate data base
+INDIR=${Here}/NCEP-NA-sample
+# Result directory
+OUTDIR=$Here/outdir
+# choose season: either one of the following or "ANU" for annual
+#season='DJF MAM JJA SON'
+season='ANU'   #or 'DJF' or ... 'SON' or 'DJF MAM JJA SON'
+Grid_i1=1
+Grid_i2=61  #5 #28
+Grid_di=1
+Grid_j1=1
+Grid_j2=27  #4 #27
+Grid_dj=1
+#
+# gridsettings and define parameters
+# here the value of season is left as a variable: _season_
+cat > class_settings.gen <<___EOF
+&grid_cfg
+`cat grids/classification_settings.nml | sed 's/\&grille//'`
+/
+&gz2vg_cfg
+ season = '_season_', version = 1
+ ip1s = 1000, 850, 700, 500
+ height = 0., 1500., 3000., 5500.
+ method = 'hydrostatic'
+ shearvec = .false. 
+ byear = 2001, bmonth = 01, bday = 01, bhour = 00, sampling = 6
+ eyear = 2001, emonth = 02, eday = 28, ehour = 18
+ region = ''
+ indir = '${INDIR}'
+ outdir = '${OUTDIR}/_season_'
+ ofile = 'classes__season_.fst'
+ swtt = .true., swph = .true.
+ nofc = .false., noms = .false. 
+ nsect = 16
+ nclass = 14
+ classes = 0.2, 2., 4., 6., 8., 10., 12., 14., 16., 18., 22., 26., 30., 34.
+ generalclas = .true.
+ flat_s = -5., flat_n = 10.
+/
+___EOF
+
