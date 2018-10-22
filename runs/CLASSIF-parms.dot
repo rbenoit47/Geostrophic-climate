@@ -15,9 +15,16 @@ PATH=.:$PATH
 Here=`pwd`
 #
 # Input directory of the climate data base
-INDIR=${Here}/NCEP-NA-sample
+INDIR=${Here}/NCEP-NA-sample  
+# byear = 2001, bmonth = 01, bday = 01, bhour = 00, sampling = 6
+# eyear = 2001, emonth = 02, eday = 28, ehour = 18
+#C:\Users\rbenoit\VMUbuntuSHARE\NCEP_Reanalyse_fst
+INDIR=~/VMUbuntuSHARE/NCEP_Reanalyse_fst/NA
+# selon doc ENSIM WE, la classif est faite sur 1958 - 2000
+#  byear = 1958, bmonth = 01, bday = 01, bhour = 00, sampling = 6
+#  eyear = 2000, emonth = 12, eday = 30, ehour = 18
 # Result directory
-OUTDIR=$Here/outdir
+OUTDIR=$Here/outdir  #_FULL
 # choose season: either one of the following or "ANU" for annual
 #season='DJF MAM JJA SON'
 season='ANU'   #or 'DJF' or ... 'SON' or 'DJF MAM JJA SON'
@@ -40,6 +47,8 @@ cat > class_settings.gen <<___EOF
  height = 0., 1500., 3000., 5500.
  method = 'hydrostatic'
  shearvec = .false. 
+! byear = 1958, bmonth = 01, bday = 01, bhour = 00, sampling = 6
+! eyear = 2000, emonth = 12, eday = 30, ehour = 18
  byear = 2001, bmonth = 01, bday = 01, bhour = 00, sampling = 6
  eyear = 2001, emonth = 02, eday = 28, ehour = 18
  region = ''

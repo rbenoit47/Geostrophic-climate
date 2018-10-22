@@ -55,7 +55,7 @@ ip1=`r.fstliste -izfst ${ifile2} -nomvar FREQ -col 15 | awk '{print $1}'`
 ip2=`r.fstliste -izfst ${ifile2} -nomvar FREQ -col 16 | awk '{print $1}'`
 ip3=`r.fstliste -izfst ${ifile2} -nomvar FREQ -col 17 | awk '{print $1}'`
 
-pgsm -iment ${ifile2} -ozsrt ${DATADIR}/lalo.std -i 2>&1 | tee -a ${Processing_log} <<EOF
+pgsm -iment ${ifile2} -ozsrt ${DATADIR}/lalo.std -i 2>&1 <<EOF | tee -a ${Processing_log}
    sortie( std, 2000, R )
    grille( tape1, ${ip1}, ${ip2}, ${ip3} ) 
    heure(0)
@@ -69,7 +69,7 @@ voir -iment ${ifile2} | grep LO
 flag_lo=$?
 flag=`expr $flag_la + $flag_lo`
 if [ ${flag} -ne 0 ]; then
-   editfst -s  ${DATADIR}/lalo.std -d ${ifile2} -i 2>&1 1 | tee -a ${Processing_log}  <<___EOF
+   editfst -s  ${DATADIR}/lalo.std -d ${ifile2} -i 2>&1 <<___EOF | tee -a ${Processing_log}
       desire(-1,['LA','LO'])
       end
 ___EOF
@@ -90,7 +90,49 @@ ______EOF
 #  
 done
 
+#  here is a linux sort command that can order efficiently all the txt files
+#  much faster than swapping in the perl script
+#
+#  (head -n 2 1_table.ef && tail -n +3 1_table.ef | sort -nr -k 7,7) > newfile   #7 is column number for eweight
+#
+#  the idea would be to run it here on the entire outdir folder and turn off te swapping in perl below
+
+txtfiles=`ls $DATADIR/*/*.txt`
+echo "sorting the tables..."
+for txtfile in $txtfiles
+do
+	filename=$(basename -- $txtfile)
+	filename_="${filename%.*}"
+	tname=`echo $filename_|sed -e "s/classes/table/"` 
+	dirname_=$(dirname -- $txtfile)
+	effile="$dirname_/$tname.ef"
+	echo $txtfile  $effile
+	(head -n 2 $txtfile && tail -n +3 $txtfile | sort -nr -k 7,7) > $effile
+done
+#
+#
+echo -e '\n\n >> DONE!<< \n\n'
+rm prep_table.txt class_settings*.*
+rm -r ${OUTDIR}/*/*/*.txt  #txt form of the tables
+###
+
+exit
+
 echo 'using perl to obtain final table at point '
+PERL_OPTION='one'  #or 'one' or 'all'
+if [ $PERL_OPTION = 'all' ]
+then
+      ### Prepare table.ef for simulation
+      cat > prep_all_tables.txt << ______EOF
+${DATADIR}  .txt  .ef
+______EOF
+      # generates the table.ef files
+      perl prep_all_tables.pl
+      #
+fi
+
+if [ $PERL_OPTION = 'one' ]
+then
 for j in ${jj}; do
    for i in ${ii}; do
       tname=${DATADIR}/${j}/${i}_table.ef
@@ -107,9 +149,5 @@ ______EOF
       #
    done
 done
-#
-#
-echo -e '\n\n >> DONE!<< \n\n'
-rm prep_table.txt class_settings*.*
-rm -r ${OUTDIR}/*/*/*.txt  #txt form of the tables
-###
+fi
+

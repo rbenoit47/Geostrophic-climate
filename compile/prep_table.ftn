@@ -99,7 +99,7 @@ c
       enddo
 c
       allocate( uuvvtt(imx,jmx,kmx,nvar), stat=status )
-      cols = 5 + nvar*kmx
+      cols = 6 + nvar*kmx  !  add one column for eweight to bypass the perl script calculation of it .  so 5 becomes 6
       simx = ( i2 - i1 ) / di + 1
       sjmx = ( j2 - j1 ) / dj + 1
       allocate( aline(cols,nshear,nclass,nsect,simx,sjmx), stat=status )
@@ -176,10 +176,11 @@ c
                   aline(3,shear,iclas,sect,i,j) = fshear(shear)
                   aline(4,shear,iclas,sect,i,j) = freq(ipt,jpt)
                   aline(5,shear,iclas,sect,i,j) = ff * freq(ipt,jpt)
+                  aline(6,shear,iclas,sect,i,j) = (ff**3) * freq(ipt,jpt)  !to include eweight as new column 6
                   do ivar = 1, nvar
                   do k = 1, kmx
-                     aline(5+k+(ivar-1)*kmx,shear,iclas,sect,i,j)
-     &                     = uuvvtt(ipt,jpt,k,ivar)
+                     aline(6+k+(ivar-1)*kmx,shear,iclas,sect,i,j)
+     &                     = uuvvtt(ipt,jpt,k,ivar)   !5 becomes 6 because of eweight
                   enddo
                   enddo
                endif
@@ -224,11 +225,24 @@ c
      &                         'FLAT0:', flat0
  1000 format( a2, 1x, i3, 1x, a2, 1x, i3, 1x, a9, 1x, f8.3, 1x, a10, 1x,
      &        f8.3, 1x a6, 1x, f8.3 )
+!  add the second line of the header found in tables.ef  RB 2018
+!  "HEADER     id      dd     uv  shear    freq   weight     eweight     uu1     uu2     uu3     uu4     vv1     vv2     vv3     vv4     tt1     tt2     tt3     tt4 status"
+!  the content of this header line can change according to the elements put on the class lines e.g. more than 4 levels of uu vv tt
+	 write (iunout,1001) 
+     &  'HEADER',	 
+     &  'id',  'dd', 'uv', 'shear', 'freq', 'weight', 'eweight',
+     &  'uu1', 'uu2', 'uu3', 'uu4',
+     &  'vv1', 'vv2', 'vv3', 'vv4',
+     &  'tt1', 'tt2', 'tt3', 'tt4',
+     &  'status'
+!  from pl file: "HEADER %6s %7s %6s %6s %7s %8s %11s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %6s \n"
+1001	 format(a7a6a7a6a6a7a8a11a8a8a8a8a8a8a8a8a8a8a8a8a7)  
+! strangely last item needs an a7 to leave a blank contrary to in perl %6s
 *
 **** writes vaelues sorted by wind direction sector ******************************************************
 *
          do sect = 1, nsect
-            write( iunout, '(i2)' ) sect 
+! no more without perl            write( iunout, '(i2)' ) sect 
             do iclas = 1, nclass
             do shear = 1, nshear
                if ( aline(1,shear,iclas,sect,i,j) .ne. -1. ) then
@@ -241,8 +255,10 @@ c
          close ( iunout )
       enddo
       enddo
- 100  format ( a12, 1x, 3(1x,f8.3), 1x, f7.4, 1x, f10.4, 1x,
+ 100  format ( a12, 1x, 3(1x,f8.3), 1x, f7.4, 1x, f10.4, 1x,   
+     &         f15.4, 1x, 
      &         8(1x,f8.3), 4f8.3 )
+!               15.4 added for eweight
 c
 ***************************************************************************************************
 ***************************************************************************************************
