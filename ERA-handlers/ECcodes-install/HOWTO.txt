@@ -1,0 +1,14 @@
+ECcodes is an excellent software package developed by ECMWF that allows a clean handling of GRIB files, especially those in the ERA-Interim and ERA-5 datastores.
+
+We are using ECcodes to read the ERA* files that we download as Reanalysis (RA) data to build our Geostrophic wind climate for WEST.
+
+Although ECcodes can provide high-level interfaces in Fortran90, C and Python, we only need the pythonic part for our purpose.
+So this install guide is focussed on generating those pythonic modules in the environment of our Linux machine.
+
+Here is a step-by-step guide on how to achieve that installation.
+
+1.  do this...
+
+2.  then do that ...
+
+etc etc
