@@ -7,8 +7,16 @@ So this install guide is focussed on generating those pythonic modules in the en
 
 Here is a step-by-step guide on how to achieve that installation.
 
+David: construis les instructions à partir de celles données à cet URL:
+https://confluence.ecmwf.int/display/ECC/ecCodes+installation
+dans les instructions tu devrais avoir une commande du genre
+cmake -DCMAKE_INSTALL_PREFIX=$HOME/eccodes ../eccodes-x.y.z-Source
+
+
 1.  do this...
+mkdir $HOME/eccodes
 
 2.  then do that ...
+sudo apt-get install cmake  #je crois ou Cmake??
 
 etc etc
