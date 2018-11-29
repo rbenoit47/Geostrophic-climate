@@ -1,0 +1,17 @@
+ECCODES_LIB=~/eccodes/lib
+ECCODES_INCLUDE=~/eccodes/include
+export LIBRARY_PATH=${ECCODES_LIB}:$LIBRARY_PATH
+export LD_LIBRARY_PATH=$LIBRARY_PATH
+#
+rm -f *.o ahGRB2FST
+set -e
+r.compile -o ahGRB2FST -src ahGRB2FST.f90 -libpath ${ECCODES_LIB} -libpriv eccodes_f90 \
+          -includes $ECCODES_INCLUDE -librmn rmn_015.2 -debug
+rm -f *.fst *.o
+Here=`pwd`
+pushd ..
+ln -sfn $Here/ahGRB2FST
+popd
+rm -rf .fo
+rm -f *~
+

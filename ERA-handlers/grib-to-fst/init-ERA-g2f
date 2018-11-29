@@ -1,0 +1,57 @@
+#!/bin/bash
+#
+# to initialize the ERA-g2f
+#
+# check environment stuff first
+#
+which true_path >/dev/null || { echo EC environment not available ; exit 1; }
+which grib_ls   >/dev/null || { echo eccodes not available ; exit 1 ; }
+#  rpn python
+#   [ -z "${string##*$reqsubstr*}" ] https://stackoverflow.com/questions/229551/string-contains-in-bash
+[[ -z "${PYTHONPATH##*pyrpn*}" ]] || { echo rpn-py not available ; exit 1 ; }
+grib2fst=./ahGRB2FST
+[[ -x $grib2fst  ]] || { echo $grib2fst not available as executable ; exit 1 ; }
+g2f_logs=logs
+mkdir -p $g2f_logs
+#
+. my-RA-data
+#
+#  the RA_* files ??? already have absolute paths.  don't true_path or readlink them !!!
+ap_vg=`absolute_path $RA_VG`
+cat >.ERArc <<FIN
+export RA_VG=$ap_vg
+grib2fst=$grib2fst
+export g2f_logs=${g2f_logs}
+FIN
+#
+echo -e "\nDonnées prêtes pour le ERA-g2f::\n"
+env |grep RA_
+if [[ -z `ls ${g2f_logs}/*-ls.log` ]]; then
+# catalogues
+echo "On fait les catalogues des fichiers grib ... patience"
+echo Catalogue VG
+grib_ls $RA_VG > ${g2f_logs}/VG-ls.log
+else
+echo -e "\nles catalogues des fichiers grib sont ici:\n"
+ls -al ${g2f_logs}/*-ls.log
+fi
+echo -e "\nNombre de messages dans les données:"
+grep '[0-9] messages' ${g2f_logs}/*-ls.log
+echo -e "\nNombre de records z 1000 mb:" 
+grep -w 'z' ${g2f_logs}/VG-ls.log |grep -w 1000 |wc -l 
+echo Intervalle des dates:
+awk 'NR==3{print $5}' ${g2f_logs}/VG-ls.log 
+tac ${g2f_logs}/VG-ls.log |awk 'NR==4{print $5}'
+#
+cat >/dev/null <<FIN
+echo -e "\nNombre de records u 10 metre:"
+grep -w '10u' ${MCPg_logs}/UVS-ls.log |wc -l 
+echo Intervalle des dates:
+awk 'NR==3{print $5}' ${MCPg_logs}/UVS-ls.log 
+tac ${MCPg_logs}/UVS-ls.log |awk 'NR==4{print $5}'
+#
+echo -e "\ncatalogue GEOPHY:"
+grep dataDate ${MCPg_logs}/GEOPHY-ls.log
+grep surface ${MCPg_logs}/GEOPHY-ls.log
+#
+FIN

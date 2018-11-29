@@ -1,0 +1,5 @@
+# list your reanalysis (=RA) files
+# holding the data to compute the geostrophic wind (i.e. geopotential etc)
+#
+RA_VG=downloads/gaspe_nohup_1980.grb
+

@@ -1,0 +1,47 @@
+#!/bin/bash
+#
+. .ERArc
+#
+# 	Northward/Eastward turbulent surface stress
+#  Northward surface stress due to turbulent processes. Accumulated field.
+#  FST name is AW for module of it.  Here introduce components of AW: AWNS and AWEW.  
+#  no units change.  Instantaneous would be FQ in FST  [Pa]
+#
+cat > ahdict_ <<FIN
+shortName grbunits is2D3D nomvar fstunits mult add
+'10u'        'm/s'      '2D'     'UU'      'kt'     1.94384   0
+'10v'        'm/s'      '2D'     'VV'      'kt'     1.94384   0
+'z'  'm2/s2'  '3D' 'GZ'  'dam' 0.010197162  0.0
+'z'  'm2/s2'  '2D' 'ME'  'dam' 0.010197162  0.0
+'t'  'degK'  '3D' 'TT' 'degC'  1.0   -273.15
+'r'  '1'  '3D'  'HR'  '%'      100.  0.
+'nsss' 'N/m2*s'  '2D'  'AWNS' 'Pa*s'  1  0
+'ewss' 'N/m2*s'  '2D'  'AWEW' 'Pa*s'  1  0
+FIN
+sed -e 's/\s\+/,/g' ahdict_ >ahdict
+#
+for GRIBfile in $RA_VG
+do
+echo GRIBfile is $GRIBfile
+gribsuffix=."${GRIBfile##*.}"
+gribdir=`dirname $GRIBfile`
+nombase=`basename --suffix=${gribsuffix} ${GRIBfile}`
+FSTfile=${gribdir}/${nombase}.fst
+cat > ahcontrols <<FIN
+&controls
+ grib='$GRIBfile'
+ fst='$FSTfile'
+! rootfst='$nombase'
+! months=1,2   ! specify first and last month to convert to FST files
+ catch2d='10u','10v','nsss','ewss','z'   ! z for topography 2d
+ catch3d='z','t','r'
+/
+FIN
+cat ahdict >> ahcontrols
+echo -e "\ngribfile: $GRIBfile\nfstfile: $FSTfile\n"
+rm -f $FSTfile
+$grib2fst < ahcontrols 2>&1 | tee ${g2f_logs}/${nombase}.log
+done
+#
+rm ahdict*  *~  ahcontrols
+
