@@ -1,11 +1,25 @@
 #!/bin/bash
 #
-. .ERArc
-#
-# 	Northward/Eastward turbulent surface stress
+#  about this dict(ionary):
+#  Northward/Eastward turbulent surface stress
 #  Northward surface stress due to turbulent processes. Accumulated field.
 #  FST name is AW for module of it.  Here introduce components of AW: AWNS and AWEW.  
 #  no units change.  Instantaneous would be FQ in FST  [Pa]
+#
+# get grib files fst output dir and log directory from cl argument
+if [ _$1 = '_' -o _$2 = '_' -o _$3 = '_' ]
+then
+echo -e 'Calling sequence is '$0' grib-files-list fst-dir logs-dir\n'
+exit
+fi
+#
+RA_VG=`absolute_path $1`
+fstdir=`absolute_path $2`
+g2f_logs=$3
+echo $1 $2 $3
+#exit
+#
+grib2fst=ahGRB2FST
 #
 cat > ahdict_ <<FIN
 shortName grbunits is2D3D nomvar fstunits mult add
@@ -20,28 +34,34 @@ shortName grbunits is2D3D nomvar fstunits mult add
 FIN
 sed -e 's/\s\+/,/g' ahdict_ >ahdict
 #
-for GRIBfile in $RA_VG
+set -x
+#
+ls -al $RA_VG
+mkdir $fstdir
+#
+for GRIBfile in $RA_VG  # $RA_UVS   #$RA_GEOPHY
 do
-echo GRIBfile is $GRIBfile
-gribsuffix=."${GRIBfile##*.}"
-gribdir=`dirname $GRIBfile`
-nombase=`basename --suffix=${gribsuffix} ${GRIBfile}`
-FSTfile=${gribdir}/${nombase}.fst
-cat > ahcontrols <<FIN
-&controls
- grib='$GRIBfile'
- fst='$FSTfile'
-! rootfst='$nombase'
-! months=1,2   ! specify first and last month to convert to FST files
- catch2d='10u','10v','nsss','ewss','z'   ! z for topography 2d
- catch3d='z','t','r'
-/
+	gribsuffix=."${GRIBfile##*.}"
+	gribdir=`dirname $GRIBfile`
+	nombase=`basename --suffix=${gribsuffix} ${GRIBfile}`
+	# FSTfile=${gribdir}/${nombase}.fst
+	FSTfile=${fstdir}/${nombase}.fst
+	cat > ahcontrols <<FIN
+	&controls
+	 grib='$GRIBfile'
+	 fst='$FSTfile'
+	! rootfst='$nombase'
+	! months=1,2   ! specify first and last month to convert to FST files
+	 catch2d='10u','10v','nsss','ewss','z'   ! z for topography 2d
+	 catch3d='z','t','r'
+	/
 FIN
-cat ahdict >> ahcontrols
-echo -e "\ngribfile: $GRIBfile\nfstfile: $FSTfile\n"
-rm -f $FSTfile
-$grib2fst < ahcontrols 2>&1 | tee ${g2f_logs}/${nombase}.log
+	cat ahdict >> ahcontrols
+	echo -e "\ngribfile: $GRIBfile\nfstfile: $FSTfile\n"
+	rm -f $FSTfile
+	$grib2fst < ahcontrols 2>&1 | tee ${g2f_logs}/${nombase}.log
 done
 #
-rm ahdict*  *~  ahcontrols
-
+#  clean up
+rm ahcontrols ahdict* *~
+#

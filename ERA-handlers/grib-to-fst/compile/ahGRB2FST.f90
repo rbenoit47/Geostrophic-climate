@@ -21,7 +21,7 @@
 !
   integer ier, iunit, fnom, fclos, fstouv, fstecr, fstfrm, newdate, readstat, endofnml
   external fnom, fclos, fstouv, fstecr, fstfrm, newdate, cxgaig, flipOnJ
-  character (len=80) ifileFST, fname
+  character (len=160) ifileFST, fname   ! to match length of fst name in namelist
   parameter (iunit=1)
   real, dimension(:,:), allocatable  ::  work   , work2
   integer npak, bdateo, deet, &
