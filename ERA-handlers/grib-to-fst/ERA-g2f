@@ -1,5 +1,13 @@
 #!/bin/bash
 #
+function absolute_path { 
+	if [ ${1:0:1} == / ]
+	then
+	echo "$1"
+	else
+	[[ -e $1 ]] && echo "$PWD/$1" || echo "$1::_No_such_file_or_directory" 
+	fi
+}
 #  about this dict(ionary):
 #  Northward/Eastward turbulent surface stress
 #  Northward surface stress due to turbulent processes. Accumulated field.
@@ -13,11 +21,18 @@ echo -e 'Calling sequence is '$0' grib-files-list fst-dir logs-dir\n'
 exit
 fi
 #
+# precautions
+#
+[ ! -d $2 ] && mkdir -p $2
+[ ! -d $3 ] && mkdir -p $3
+#
 RA_VG=`absolute_path $1`
 fstdir=`absolute_path $2`
 g2f_logs=$3
 echo $1 $2 $3
-#exit
+echo RA_VG:$RA_VG
+echo fstdir:$fstdir
+echo g2f_logs:$g2f_logs
 #
 grib2fst=ahGRB2FST
 #
