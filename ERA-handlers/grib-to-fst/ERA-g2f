@@ -15,24 +15,33 @@ function absolute_path {
 #  no units change.  Instantaneous would be FQ in FST  [Pa]
 #
 # get grib files fst output dir and log directory from cl argument
-if [ _$1 = '_' -o _$2 = '_' -o _$3 = '_' ]
+if [ _$1 = '_' -o _$2 = '_' -o _$3 = '_' -o _$4 = '_' -o _$5 = '_' ]
 then
-echo -e 'Calling sequence is '$0' grib-files-list fst-dir logs-dir\n'
+echo -e 'Calling sequence is '$0' grib-FOLDER grib-files-mask grib-files-extension fst-dir logs-dir\n'
 exit
 fi
 #
 # precautions
 #
-[ ! -d $2 ] && mkdir -p $2
-[ ! -d $3 ] && mkdir -p $3
+[ -f $1 ] && echo -e $1 $2 \\n first argument must be a directory not a _file_ && exit  1 
 #
-RA_VG=`absolute_path $1`
-fstdir=`absolute_path $2`
-g2f_logs=$3
-echo $1 $2 $3
+DIR1=`dirname ${1}/_`
+RA_VG=`absolute_path $DIR1`
+GRB_MASK=$2
+GRB_EXT=$3
+fstdir=`absolute_path $4`
+g2f_logs=$5
+echo arguments: $1 $2 $3 $4 $5 
+echo $DIR1
 echo RA_VG:$RA_VG
 echo fstdir:$fstdir
 echo g2f_logs:$g2f_logs
+#
+# precautions
+#
+[ ! -d $4 ] && mkdir -p $4
+[ ! -d $5 ] && mkdir -p $5
+#exit
 #
 grib2fst=ahGRB2FST
 #
@@ -51,10 +60,10 @@ sed -e 's/\s\+/,/g' ahdict_ >ahdict
 #
 set -x
 #
-ls -al $RA_VG
-mkdir $fstdir
+ls -al ${RA_VG}/${GRB_MASK}*${GRB_EXT}
+mkdir -f $fstdir
 #
-for GRIBfile in $RA_VG  # $RA_UVS   #$RA_GEOPHY
+for GRIBfile in ${RA_VG}/${GRB_MASK}*${GRB_EXT}
 do
 	gribsuffix=."${GRIBfile##*.}"
 	gribdir=`dirname $GRIBfile`

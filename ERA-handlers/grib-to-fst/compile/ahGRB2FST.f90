@@ -56,7 +56,7 @@
   character *2, is2D3D(maxdict)
   real   mults(maxdict), adds(maxdict)
   integer idict, ndict
-
+!
   print *,'********************************'
   print *,'*                              *'
   print *,'* ad-hoc GRIB to FST converter *'
@@ -327,3 +327,32 @@
   ier = fclos(iunit)
 
  end program ahGRB2FST
+ 
+      subroutine grid_gen ! ()
+      implicit none
+!
+!*** import namelist ****
+!
+include "comdecks/grid.cdk"
+!
+      integer unnml, k, status
+      parameter ( unnml = 10 )
+      character*80 nml
+!
+      namelist /grid_cfg/ Grd_proj_S, Grd_ni, Grd_nj, &
+                          Grd_iref, Grd_jref, Grd_latr, Grd_lonr, &
+                          Grd_dx, Grd_dgrw, Grd_phir, &
+                          Grd_xlat1, Grd_xlon1, Grd_xlat2, Grd_xlon2
+!
+      nml = 'grid_cfg'
+      open ( unnml, file=nml, access='sequential', &
+     &       form='formatted', status='new', iostat=status )
+      if ( status .ne. 0 ) then
+         print *, 'FILE ', trim(nml), ' NOT FOUND'  !RB 2018
+         stop
+      endif
+      write ( unnml, nml=grid_cfg )
+      close ( unnml )
+      return
+      end subroutine grid_gen
+
