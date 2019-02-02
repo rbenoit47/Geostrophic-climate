@@ -320,7 +320,10 @@
     call codes_grib_new_from_file(ifile,igrib, iret)
  
   end do LOOP
- 
+  
+! prepare de grid settings file for the WEST classification program
+  call grid_gen(fst,ni,nj,dlat,dlon,xlat0,xlon0)
+! 
   call codes_close_file(ifile)
  
   ier = fstfrm(iunit)
@@ -328,8 +331,11 @@
 
  end program ahGRB2FST
  
-      subroutine grid_gen ! ()
+      subroutine grid_gen  (fst,ni,nj,dlat,dlon,xlat0,xlon0)
       implicit none
+      character*(*) fst  !careful fst is 160 long in main
+      integer ni,nj
+      real dlat,dlon,xlat0,xlon0
 !
 !*** import namelist ****
 !
@@ -337,22 +343,64 @@ include "comdecks/grid.cdk"
 !
       integer unnml, k, status
       parameter ( unnml = 10 )
-      character*80 nml
+      character*170 nml
 !
-      namelist /grid_cfg/ Grd_proj_S, Grd_ni, Grd_nj, &
+      namelist /grille/ Grd_proj_S, Grd_ni, Grd_nj, &
                           Grd_iref, Grd_jref, Grd_latr, Grd_lonr, &
                           Grd_dx, Grd_dgrw, Grd_phir, &
                           Grd_xlat1, Grd_xlon1, Grd_xlat2, Grd_xlon2
+      character*160 string1,string2 
+!      
+      if (dlat.ne.dlon) then
+        print *, 'this case is not supported.  dlat .ne. dlon'
+      print *, dlat, dlon
+      stop "dlat different from dlon"
+      endif
 !
-      nml = 'grid_cfg'
+      call split_string(fst,string1,string2,'.')
+      nml = trim(string1)//'_settings.nml'  !'grid_cfg'
+      print *,'settings file:',nml
+!     
       open ( unnml, file=nml, access='sequential', &
-     &       form='formatted', status='new', iostat=status )
+     &       form='formatted', status='replace', iostat=status )
       if ( status .ne. 0 ) then
          print *, 'FILE ', trim(nml), ' NOT FOUND'  !RB 2018
          stop
       endif
-      write ( unnml, nml=grid_cfg )
+!      
+      Grd_proj_S='L'
+	Grd_ni= ni
+	Grd_nj= nj
+	Grd_iref= 1
+	Grd_jref= 1
+	Grd_latr= xlat0
+	Grd_lonr= xlon0
+	Grd_dx= dlat
+!  pour les xlat xlon ici valeurs pour axes geo vrais.  PAS toucher cidessous	
+	Grd_dgrw= 0.0
+	Grd_phir= 0.0
+	Grd_xlat1= 0.0
+	Grd_xlon1= 180.0
+	Grd_xlat2= 0.0
+	Grd_xlon2= 270.
+!      
+      write ( unnml, nml=grille )
       close ( unnml )
       return
       end subroutine grid_gen
+      
+  ! split a string into 2 either side of a delimiter token
+  SUBROUTINE split_string(instring, string1, string2, delim)
+    CHARACTER*(*) :: instring
+    character(1)  delim
+    CHARACTER(160),INTENT(OUT):: string1,string2
+    INTEGER :: index
+
+    instring = TRIM(instring)
+
+    index = SCAN(instring,delim)
+    string1 = instring(1:index-1)
+    string2 = instring(index+1:)
+
+  END SUBROUTINE split_string      
 
