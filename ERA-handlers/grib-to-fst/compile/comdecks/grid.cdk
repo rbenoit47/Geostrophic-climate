@@ -1,0 +1,12 @@
+! NB: f90 flavour for continuations
+      integer Grd_ni, Grd_nj, Grd_iref, Grd_jref
+      real Grd_latr, Grd_lonr, Grd_dx, Grd_dgrw, Grd_phir, &
+           Grd_xlat1, Grd_xlon1, Grd_xlat2, Grd_xlon2
+      character*1 Grd_proj_S
+!
+      common /grid_i/ Grd_ni, Grd_nj, Grd_iref, Grd_jref
+!
+      common /grid_r/ Grd_latr, Grd_lonr, Grd_dx, Grd_dgrw, Grd_phir, &
+                      Grd_xlat1, Grd_xlon1, Grd_xlat2, Grd_xlon2
+!
+      common /grid_c/ Grd_proj_S
