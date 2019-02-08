@@ -52,7 +52,7 @@ shortName grbunits is2D3D nomvar fstunits mult add
 'z'  'm2/s2'  '3D' 'GZ'  'dam' 0.010197162  0.0
 'z'  'm2/s2'  '2D' 'ME'  'dam' 0.010197162  0.0
 't'  'degK'  '3D' 'TT' 'degC'  1.0   -273.15
-'r'  '1'  '3D'  'HR'  '%'      100.  0.
+'r'  '1'  '3D'  'HR'  '0_1'      1.  0.
 'nsss' 'N/m2*s'  '2D'  'AWNS' 'Pa*s'  1  0
 'ewss' 'N/m2*s'  '2D'  'AWEW' 'Pa*s'  1  0
 FIN
