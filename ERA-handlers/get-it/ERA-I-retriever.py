@@ -18,7 +18,7 @@ def retrieve_interim():
        In the example below the data are organised in files per month. (eg "interim_daily_201510.grb")
     """
     yearStart = 1980 #2001
-    yearEnd =   1989   #2010
+    yearEnd =   1980   #2010
     monthStart = 1
     monthEnd = 12
     for year in list(range(yearStart, yearEnd + 1)):
