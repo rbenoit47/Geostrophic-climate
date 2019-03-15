@@ -18,7 +18,7 @@ if (( $(echo "$grid < 0.25" | bc -l) )); then
 fi
 [ $yyyy -lt 1979 ] && echo year must be ge 1979 && exit 1
 #
-for mm in {01..12}
+for mm in {1..12}
 do
 echo =========================
 echo "=                       ="
@@ -30,26 +30,33 @@ python -W ignore <<FIN
 #!/usr/bin/env python
 import cdsapi
 import calendar as cal
-j,k=cal.monthrange($yyyy,$mm)
+folder='$folder'
+yyyy=$yyyy
+mm=$mm
+mms=str(mm)
+j,k=cal.monthrange(yyyy,mm)
 dd=range(1,k+1)
 dds=[]
 for e in dd:
 	dds.append(str(e))
+#
+outname=folder+'/ERA5-'+folder+'-'+str(yyyy)+mms.zfill(2)+'.grib'
 c = cdsapi.Client()
 c.retrieve("reanalysis-era5-pressure-levels",
 	{
 		'variable':['geopotential','relative_humidity','temperature'],
 		'pressure_level':['500','700','850','1000'],
 		'product_type':'reanalysis',
-		'year':'${yyyy}',
-		'month':'${mm}',
+		'year':str(yyyy),     #'${yyyy}',
+		'month':mms.zfill(2),  #'${mm}',
 		'day': dds,
 		'time':['00:00','06:00','12:00','18:00'],
 		'area'    : '${North}/${West}/${South}/${East}', #'85/-170/20/-20', # North, West, South, East. Default: global
 		'grid'    : '${grid}/${grid}' ,  #'2.5/2.5', # Lat/lon grid: east-west (longitude) and north-south resolution (latitude)
 		'format':'grib'
 	},
-	"${folder}/ERA5-${yyyy}${mm}.grib")
+	outname)  
+	#"${folder}/ERA5-${folder}-${yyyy}${mm}.grib")
 #	
 """
 D'autre part, avec python on a pu etablir 
