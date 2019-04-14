@@ -16,6 +16,7 @@
   real                               ::  average,min_val, max_val
   integer                            ::  is_missing
   character(len=10)                  ::  open_mode='r'
+  integer                            ::  marsClass   !RB 2019
 !
 !  FST
 !
@@ -71,7 +72,9 @@
   ip3=0
   outdir='.'
   verbose=0 !0-1-2
-  etiket='ERA-I_to_FST'
+  !RB 2019 adjust etiket to either ERAI or ERA5 depending 
+  !  on grib source key marsClass (=14 for ERA Interim; =23 for ERA5)
+  etiket='' !'ERA-I_to_FST'  ! to be defined in messages loop
   months=0  ! user can specify start and end month (2 values)
   rootfst=''
   catch2d(:)=''
@@ -150,7 +153,7 @@
   endif
 
 !  ip3=-1
-
+	marsClass=-1  !RB 2019
   ! Loop on all the messages in a file.
  
   ! A new GRIB message is loaded from file
@@ -171,7 +174,19 @@
     else
         write(*,*) 'numberOfPointsAlongAParallel is missing'
     endif
- 
+    !RB 2019 adjust etiket to either ERAI or ERA5 depending 
+    !  on grib source key marsClass (=14 for ERA Interim; =23 for ERA5)
+    call codes_get(igrib,'marsClass',marsClass)
+    select case (marsClass)
+    	case(14)
+    		etiket='FSTfrom_ERAI'
+ 		case(23)
+ 			etiket='FSTfrom_ERA5'
+		case default
+			! unsupported
+			write(*,*) 'marsClass not available or unsupported:',marsClass
+			call exit
+	 end select			
     ! Get as an integer
     call codes_get(igrib,'Nj',numberOfPointsAlongAMeridian)
     if (verbose .eq. 2) then 

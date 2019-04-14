@@ -1,5 +1,6 @@
       program prep_table
       implicit none
+!         #include "constants/gz2vg.cdk"  !RB 2019 metadata
 *
 **** prepares classes in .txt-files
 *
@@ -9,7 +10,7 @@
       integer isect, sect, shear, iclas, i, j, k, ivar
       integer i1, i2, di, j1, j2, dj, ipt, jpt
       integer nsect, nshear, nclass, imx, jmx, kmx, nvar
-      parameter ( nsect=16, nshear=2, nclass=14, nvar=3, kmx=4 )
+      parameter ( nsect=16, nshear=2, nclass=14, nvar=3, kmx=50)  !RB 2019 use maxlevels not 4 )
       real dangle, angle(nsect), fshear(nshear), dd, ff
       character (len=1) cshear(nshear)
       character (len=4) nomvar(nvar)
@@ -19,7 +20,7 @@
       data cshear / 'M', 'P' /
       data fshear / -1., 1. /
       data nomvar / 'UU', 'VV', 'TT' /
-      data height / 0., 1500., 3000, 5500. /
+      !RB 2019 metadata   data height / 0., 1500., 3000, 5500. /
       integer version
       parameter ( version=1 )
       character (len=3) atlas
@@ -44,6 +45,15 @@
       character*4 nomvar1
       character*12 etiket
       real flat_s, flat_n, flat0
+!RB 2019 <
+!   metadata info about run made with classification programs
+!  this will go on first line of all produced tables.ef
+		integer iunclass,YYYYMMDDHH1, YYYYMMDDHH2, nkout
+		real Grd_dx
+		parameter (iunclass=3)
+		character*4 RATYPE
+		character*80 FMTmeta
+!RB 2019 >
 !RB 2018 <
       real *8 atan2d, rad2deg
       real xxx, yyy
@@ -59,6 +69,17 @@
       read ( *, '(a)' ) ifile
       read ( *, '(a)' ) outdir
       read ( *, '(a)' ) ofile
+!RB 2019 <
+!  get metadata from newclas file
+		fname = trim(outdir) // '/' // 'newclas'
+		open ( iunclass, file=fname, form='formatted', status='old' )
+		read (iunclass,*) 
+     $ RATYPE,YYYYMMDDHH1,YYYYMMDDHH2,Grd_dx,nkout,height(1:nkout)
+		print *,
+     $ RATYPE,YYYYMMDDHH1,YYYYMMDDHH2,Grd_dx,nkout,height(1:nkout)
+		close (iunclass)
+		! call exit
+!RB 2019 >		
 *
 **** open input file **************************************************************
 *
@@ -220,11 +241,19 @@ c
                flat0 = lat(ipt,jpt)
             endif
          endif
+         !  RB 2019: modernization
+         !  here we will write new infos:
+         !  Reanalysis type [NCEP,ERAI,ERA5]
+         !  Analysis Period: in form of 2 YYYYMM values of beginning and end
+         !  Analysis resolution: in degrees [2.5,0.75,0.25]
+         !  Heights of profile points for the uu vv tt 
          write( iunout, 1000 ) 'I:', ipt, 'J:', jpt, 'Latitude:',
      &                         lat(ipt,jpt), 'Longitude:', lon(ipt,jpt),
-     &                         'FLAT0:', flat0
+     &                         'FLAT0:', flat0,
+     &    RATYPE,YYYYMMDDHH1,YYYYMMDDHH2,Grd_dx,nkout,height(1:nkout)  !RB 2019 modernization
  1000 format( a2, 1x, i3, 1x, a2, 1x, i3, 1x, a9, 1x, f8.3, 1x, a10, 1x,
-     &        f8.3, 1x a6, 1x, f8.3 )
+     &        f8.3, 1x a6, 1x, f8.3, 
+     &        1x,a,2i12,f10.5,i5,50(f6.1,1x))  !RB 2019 extended the format for metadata
 !  add the second line of the header found in tables.ef  RB 2018
 !  "HEADER     id      dd     uv  shear    freq   weight     eweight     uu1     uu2     uu3     uu4     vv1     vv2     vv3     vv4     tt1     tt2     tt3     tt4 status"
 !  the content of this header line can change according to the elements put on the class lines e.g. more than 4 levels of uu vv tt

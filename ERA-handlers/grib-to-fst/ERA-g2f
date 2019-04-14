@@ -39,7 +39,7 @@ echo g2f_logs:$g2f_logs
 #
 # precautions
 #
-[ ! -d $4 ] && mkdir -p $4
+[ ! -d $4 ] && mkdir -p $4 && fstdir=`absolute_path $4`
 [ ! -d $5 ] && mkdir -p $5
 #exit
 #

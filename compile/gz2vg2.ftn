@@ -27,7 +27,7 @@ c
 ****
       character (len=2) nomvar
       character (len=1) typvar, grtyp
-      character (len=8) etiket
+      character (len=12) etiket   !RB 2019 len=8
       integer key, dateo, datev, deet, npas, ni, nj, nk, idate
       integer npak, datyp, nbits
       integer ip1vg, ip2vg, ip3vg, ip1gz, ip2gz, ip3gz
@@ -84,7 +84,7 @@ c
      &                                       tt_out, hu_out
       integer isect, sect, secti, nshear, iclas, she1, she2, she
       integer maxclassect
-      parameter ( nshear=2, maxclassect=14 )
+      parameter ( nshear=2, maxclassect=14 )  ! 14 )  RB 2019
       real f1, f2, f3, f4, p5
       parameter ( f1=1.35, f2=1.50, f3=2.20, f4=3.50, p5=0.5 )
       character (len=1) cshear(nshear)
@@ -105,6 +105,13 @@ c
       logical memalloc
       integer modp
       real hu, hr, tx, px, lnps
+!RB 2019 <
+!   metadata info about run made with classification programs
+!  this will go on first line of all produced tables.ef
+		integer YYYYMMDDHH1, YYYYMMDDHH2
+		character*4 RATYPE
+		character*80 FMTmeta
+!RB 2019 >
 !RB 2018 <
       real *8 atan2d, rad2deg
       real xxx, yyy
@@ -126,6 +133,8 @@ c
          if ( ip1s(k) .ne. -1 ) nkin = k
          if ( height(k) .ne. -1. ) nkout = k
       enddo
+      !RB 2019
+      RATYPE=''
 *
 **** defines angle
 *
@@ -188,6 +197,14 @@ c
       time = hour * 1000000 
       memalloc = .true.
       nrecords = 0.
+!
+!   main loop for reading climate data
+!     
+!   this is an *INFINITE* loop.  
+!   exit is via if (...) goto statements or if (...) exit statements
+!   in this case, normally it ends because of the if (...) exit.  
+!      and then execution continues right after the enddo statement (deallocate ...)
+!
       do
 *
 **** seasonal statistics: if not annual, choice of months to be used ************
@@ -254,6 +271,28 @@ c
      &                 ip1, ip2, ip3, typvar, nomvar, etiket, grtyp, 
      &                 ig1, ig2, ig3, ig4, swa, lng, dltf, ubc, extra1,
      &                 extra2, extra3 )
+      !RB 2019: analyze the etiket and the ig1..4 and dateo to document input RA 
+      !         to table header 1st line
+      if (RATYPE .eq. '') then
+      	! search etiket for type of reanalysis
+      	if (index(etiket,'NCEP').ne.0) RATYPE='NCEP'
+      	if (index(etiket,'ERA5').ne.0) RATYPE='ERA5'
+      	if (index(etiket,'ERAI').ne.0) RATYPE='ERAI'
+      	if (RATYPE.eq.'') then
+      		! bad bad
+      		write(*,*) 'could not identify RATYPE from etiket:',etiket
+      		write(*,*) 'stop'
+      		call exit(-1)
+   		endif
+		! RB 2019 write classif metadata as first line of iunclass file
+		! RATYPE='ERA5'  ! char*4. this should not be hardcoded
+		YYYYMMDDHH1=byear*1000000+bmonth*10000+bday*100+bhour
+		YYYYMMDDHH2=eyear*1000000+emonth*10000+eday*100+ehour
+		write(FMTmeta,'(a,i2,a)') '(a4,2i12,f10.5,i5,',nkout,'(f6.1,2x))'
+		write(iunclass,FMTmeta) 
+     & RATYPE,YYYYMMDDHH1,YYYYMMDDHH2,Grd_dx,nkout,height(1:nkout)
+	  endif
+
 * 
 **** Memory allocation ********************************************************
 *
@@ -622,7 +661,7 @@ c      enddo
 c
       ipt=14
       jpt=13
-
+! ipt jpt here hard-coded ...not properly defined... use grid center.  see further below  RB 2019
 *
 **** Increment "sampling" hours *******************************************************************
 *
@@ -641,8 +680,8 @@ c
 *
          print*, 'new date: dateo, date, time=', dateo, date, time
          print*, 'year, month, day, hour=', year, month, day, hour
-         if ( date .eq. enddate .and. time .eq. endtime ) exit
-      enddo
+         if ( date .eq. enddate .and. time .eq. endtime ) exit  !use of exit in a do loop terminate the loop
+      enddo  !enddo do main loop for reading climate data
 *
 **** Free memory *********************************************************************************
 *
@@ -705,7 +744,7 @@ c
             freqsect(i,j,iclas,she1,sect) = rtmp
          enddo  
          enddo  
-         enddo  
+         enddo  !enddo j, i, sect
 *
 **** The shear is not considered if the frequency is less than 0.02% *********************
 *
@@ -745,7 +784,7 @@ c
          enddo
          enddo
          enddo
-         enddo
+         enddo  !enddo j, i, sect, iclas
 *
 **** Calculationg means of shear and u,v and t for each class ****************************************
 *
@@ -783,7 +822,7 @@ c
          enddo
          enddo
          enddo
-         enddo
+         enddo  !enddo j, i, sect, iclas, she
 
 ************************************************************************************************************
 **** Write the results in STD file classes_season.fst' *****************************************************
@@ -879,7 +918,10 @@ c
             isect = ( angle(sect-1) + angle(sect) ) * 0.5 + 0.5
          endif
 c
-         write( iunclass, '(i2)' ) sect
+         ! ipt jpt not properly defined... use grid center  RB 2019
+         ipt=(nimax-1)/2  !RB
+         jpt=(njmax-1)/2  !RB
+         write( iunclass, '(''sect '',i2,'' i,j'',2i3)' ) sect,ipt,jpt  !RB 2019
          do iclas = 1, nclassect(ipt,jpt,sect)
          do she = 1, nshear
             if ( freqsect(ipt,jpt,iclas,she,sect) .ne. 0. ) then
@@ -898,8 +940,8 @@ c
                tfreq = tfreq + freqsect(ipt,jpt,iclas,she,sect)
             endif
          enddo
-         enddo
-         print*, 'tfreq =', tfreq
+         enddo  !enddo iclas she
+         print*, 'sect,nsect,tfreq =', sect,nsect,tfreq
  100  format ( 3f8.3, 1x, f7.4, 1x, f10.4, 1x, 8f8.3, 4f8.3 )
          call int2char( csect, len(csect), isect )
 c
@@ -950,8 +992,8 @@ c
             enddo
             enddo
          enddo
-         enddo
-      enddo
+         enddo  !enddo iclas she
+      enddo  !enddo sect
 *
 ****    Close the standard file ***********************************************
 ****  Unlink the unit from the standard file **********************************

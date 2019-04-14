@@ -20,26 +20,34 @@ INDIR=${Here}/NCEP-NA-sample
 # eyear = 2001, emonth = 02, eday = 28, ehour = 18
 #C:\Users\rbenoit\VMUbuntuSHARE\NCEP_Reanalyse_fst
 INDIR=~/VMUbuntuSHARE/NCEP_Reanalyse_fst/NA
+#
+INDIR=~/Geostr-clim/ERA-handlers/grib-to-fst/myfstGaspeZ   # 13x13 points
+RAgridNML=~/Geostr-clim/ERA-handlers/grib-to-fst/myfstGaspeZ/ERA5-Gaspe-200101_settings.nml  #ERA5-Gaspe-200109_settings.nml
+INDIR=/home/rb/HOST-share/NCEP-NA-2001
+RAgridNML=/home/rb/Geostr-clim/runs/grids/classification_settings_NCEP-NA.nml
+#
 # selon doc ENSIM WE, la classif est faite sur 1958 - 2000
 #  byear = 1958, bmonth = 01, bday = 01, bhour = 00, sampling = 6
 #  eyear = 2000, emonth = 12, eday = 30, ehour = 18
 # Result directory
-OUTDIR=$Here/outdir  #_FULL
+OUTDIR=$Here/outdir_NCEP_2001  #_FULL
 # choose season: either one of the following or "ANU" for annual
 #season='DJF MAM JJA SON'
 season='ANU'   #or 'DJF' or ... 'SON' or 'DJF MAM JJA SON'
 Grid_i1=1
-Grid_i2=61  #5 #28
+Grid_i2=13  #61  #5 #28
 Grid_di=1
 Grid_j1=1
-Grid_j2=27  #4 #27
+Grid_j2=13   #27  #4 #27
 Grid_dj=1
 #
 # gridsettings and define parameters
 # here the value of season is left as a variable: _season_
+# replace grids/classification_settings.nml by a script variable RAgridNML
+#  handle grille and GRILLE below
 cat > class_settings.gen <<___EOF
 &grid_cfg
-`cat grids/classification_settings.nml | sed 's/\&grille//'`
+`cat ${RAgridNML} | sed 's/\&grille//' | sed 's/\&GRILLE//' `
 /
 &gz2vg_cfg
  season = '_season_', version = 1
@@ -50,7 +58,7 @@ cat > class_settings.gen <<___EOF
 ! byear = 1958, bmonth = 01, bday = 01, bhour = 00, sampling = 6
 ! eyear = 2000, emonth = 12, eday = 30, ehour = 18
  byear = 2001, bmonth = 01, bday = 01, bhour = 00, sampling = 6
- eyear = 2001, emonth = 02, eday = 28, ehour = 18
+ eyear = 2001, emonth = 12, eday = 31, ehour = 12
  region = ''
  indir = '${INDIR}'
  outdir = '${OUTDIR}/_season_'

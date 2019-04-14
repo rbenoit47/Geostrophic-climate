@@ -112,7 +112,7 @@ done
 #
 #
 echo -e '\n\n >> DONE!<< \n\n'
-rm prep_table.txt class_settings*.*
+rm -f prep_table.txt class_settings*.*
 rm -r ${OUTDIR}/*/*/*.txt  #txt form of the tables
 ###
 
