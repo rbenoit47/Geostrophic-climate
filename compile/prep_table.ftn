@@ -9,14 +9,15 @@
 *********************************************************************************************
       integer isect, sect, shear, iclas, i, j, k, ivar
       integer i1, i2, di, j1, j2, dj, ipt, jpt
-      integer nsect, nshear, nclass, imx, jmx, kmx, nvar
-      parameter ( nsect=16, nshear=2, nclass=14, nvar=3, kmx=50)  !RB 2019 use maxlevels not 4 )
+      integer nsect, nshear, nclass, imx, jmx, kmx, nvar, maxlevels   !RB 2019
+      parameter ( nsect=16, nshear=2, nclass=14, nvar=3, maxlevels=50)  !RB 2019 use maxlevels not 4.
+!RB 2019  kmx will be reset below from «metadata»      
       real dangle, angle(nsect), fshear(nshear), dd, ff
       character (len=1) cshear(nshear)
       character (len=4) nomvar(nvar)
       character (len=3) csect
       character (len=2) cclas
-      real height(kmx)
+      real height(maxlevels)   !RB2019 (kmx)
       data cshear / 'M', 'P' /
       data fshear / -1., 1. /
       data nomvar / 'UU', 'VV', 'TT' /
@@ -78,6 +79,8 @@
 		print *,
      $ RATYPE,YYYYMMDDHH1,YYYYMMDDHH2,Grd_dx,nkout,height(1:nkout)
 		close (iunclass)
+		! (re)set kmx here
+		kmx=nkout
 		! call exit
 !RB 2019 >		
 *
