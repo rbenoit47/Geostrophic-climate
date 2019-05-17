@@ -245,9 +245,14 @@ c               ifile = cyear // trim(cmonth) // '_' // region
 c
             print*, ifile
 c
-            ier = fnom( iunin, ifile, 'STD+RND', 0)
+            ier = fnom( iunin, ifile, 'STD+RND+OLD', 0)   !RB2019 file must exist already (+OLD)
             if ( ier .lt. 0 ) then
                print *, 'Error while linking the file:', trim(ifile)
+               !RB2019 <
+               print *, 'CAVEAT: this program reads monthly files with names that MUST be this form YYYYMM'
+               print *, 'If your monthly/annual data files are named differently, '
+               print *, '   just establish one or more links to each of them of that form YYYYMM'
+               !RB2019 >
                stop
             endif
             ier = fstouv( iunin, 'STD+RND' )

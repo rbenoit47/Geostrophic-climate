@@ -6,6 +6,13 @@ set -x
 #
 . CLASSIF-parms.dot  #to get our parameters
 #
+# to create YYYYMM links if needed
+if [[ $LINKIT = '1' ]] ; then
+	Here=`pwd`
+	cd $INDIR
+	$Here/mkln.sh $HEAD $EXT link
+	cd $Here
+fi
 # [[ -e $OUTDIR   ]]
 rm -rf $OUTDIR
 mkdir $OUTDIR
@@ -40,4 +47,10 @@ do
    $GZ2VG 2>&1 | tee ${Processing_log}
 
 done
+#
+if [[ $LINKIT = '1' ]] ; then
+	cd $INDIR
+	$Here/mkln.sh $HEAD $EXT unlink
+	cd $Here
+fi
 
