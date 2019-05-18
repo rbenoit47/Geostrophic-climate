@@ -59,10 +59,12 @@ def plot_table(Tf,Sectors,Speeds,Shears):
 	H,Huu,Hdd=ptt.biFreqPlot(Speeds,Sectors,Tf)
 	if verb: 
 		print "H shape",H.shape
-		print 'Huu:',Huu
+		print 'Huu:',Huu,'Huu.__len__():',Huu.__len__()
+		print 'classes.size:',classes.size
 		print 'Hdd:',Hdd
+		print 'uuClass:',uuClass
 	#
-	ptt.speedFreqPlot(classes,Huu)
+	ptt.speedFreqPlot(classes[0:Huu.__len__()],Huu)  #
 	#
 	ptt.roseFreqPlot(ddbins,Hdd)
 	#
@@ -72,6 +74,11 @@ ptt.saveFigs=saveFigs
 WESTpath="./WESTtables"
 jWEST=list(range(54,55)) #59+1))
 iWEST=list(range(116,117)) #121+1))
+# debug mai 2019
+WESTpath="./ERA5"  #NCEP ou ERA5
+jWEST=list([1])
+iWEST=list([1])
+#
 if not ptt.usePolar:
 	print '\nPLEASE NOTE THAT THE PLOT ON DIRECTIONAL FREQS\n' \
 	'is NOT DONE ON POLAR COORDINATES DUE TO A MATPLOTLIB BUG\n' \

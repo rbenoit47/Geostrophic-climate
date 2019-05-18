@@ -23,10 +23,14 @@ INDIR=~/VMUbuntuSHARE/NCEP_Reanalyse_fst/NA
 #
 INDIR=~/Geostr-clim/ERA-handlers/grib-to-fst/myfstGaspeZ   # 13x13 points
 RAgridNML=~/Geostr-clim/ERA-handlers/grib-to-fst/myfstGaspeZ/ERA5-Gaspe-200101_settings.nml  #ERA5-Gaspe-200109_settings.nml
+# =============================================================
 INDIR=/home/rb/HOST-share/NCEP-NA-2001
 RAgridNML=/home/rb/Geostr-clim/runs/grids/classification_settings_NCEP-NA.nml
 # Result directory
 OUTDIR=$Here/outdir_NCEP_2001  #_FULL
+LINKIT=0
+# =============================================================
+#cat <<FIN >/dev/null
 #to debug YYYYMM links
 INDIR=/home/rb/Geostr-clim/ERA-handlers/grib-to-fst/test-links
 LINKIT=1  #0/1 is false/true  to create YYYYMM links
@@ -35,6 +39,8 @@ EXT=.fst
 #
 RAgridNML=~/Geostr-clim/ERA-handlers/grib-to-fst/test-links/ERA5-Gaspe-200101_settings.nml
 OUTDIR=$Here/test-links
+#FIN
+# =============================================================
 #
 # selon doc ENSIM WE, la classif est faite sur 1958 - 2000
 #  byear = 1958, bmonth = 01, bday = 01, bhour = 00, sampling = 6
@@ -75,6 +81,8 @@ cat > class_settings.gen <<___EOF
  nofc = .false., noms = .false. 
  nsect = 16
  nclass = 14
+!  RB 2019: CAVEAT dont change the speed classes below unless they are put
+!           in the metadata of the tables header
  classes = 0.2, 2., 4., 6., 8., 10., 12., 14., 16., 18., 22., 26., 30., 34.
  generalclas = .true.
  flat_s = -5., flat_n = 10.
